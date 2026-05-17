@@ -1,0 +1,193 @@
+#!python
+import sys
+mc = JavaClass("net.minecraft.client.Minecraft").getInstance()
+HudRenderCallback = JavaClass("net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback")
+ARGB = JavaClass("net.minecraft.util.ARGB")
+Component = JavaClass("net.minecraft.network.chat.Component")
+mappings = JavaClass("net.minescript.common.Minescript").mappingsLoader.get()
+
+mouse = 0
+mouse_action = -1
+x = 10
+y = 10
+xoff = 0
+yoff = 0
+
+popupX = 0
+popupY = 0
+
+drag = False
+collapsed = False
+can_select = True
+popup = False
+selected = ["",""]
+
+stop = False
+clicked = False
+
+incoming = []
+outgoing = []
+ignoring = []
+
+def reverse(lst):
+    if not len(lst) > 1:
+        return lst
+    return [lst[-1]] + reverse(lst[:-1])
+
+def rectangle(GuiGraphics,_x,_y,w,h,col,offset=True):
+    if offset: GuiGraphics.fill(x+_x, y+_y, x+_x+w, y+_y+h, ARGB.color(*col))
+    else: GuiGraphics.fill(_x, _y, _x+w, _y+h, ARGB.color(*col))
+
+def string(GuiGraphics,string,_x,_y,col,offset=True):
+    if offset: GuiGraphics.drawString(mc.font, Component.literal(string), x+_x, y+_y, ARGB.color(*col), False)
+    else: GuiGraphics.drawString(mc.font, Component.literal(string), _x, _y, ARGB.color(*col), False)
+
+def show_popup(x,y):
+    global popup, can_select, popupX, popupY
+    popup = True
+    can_select = False
+    popupX = int(x)
+    popupY = int(y)
+
+def render(GuiGraphics,delta):
+    global x,y,drag,xoff,yoff,mouse_action, popup, selected, stop, clicked, can_select
+    mx = mc.mouseHandler.xpos() * mc.getWindow().getGuiScaledWidth() / mc.getWindow().getScreenWidth()
+    my = mc.mouseHandler.ypos() * mc.getWindow().getGuiScaledHeight() / mc.getWindow().getScreenHeight()
+
+    if not collapsed:
+        if ((mx > x and mx < x + 400) and (my > y and my < y + 10)) and mouse_action == 1:
+            drag = True
+            xoff = x - mx
+            yoff = y - my
+        elif mouse_action == 0:
+            drag = False
+        
+        if popup:
+            if ((mx > popupX - 40 and mx < popupX) and (my > popupY and my < popupY + 11)) and mouse_action == 1: echo("§aIgnoring: §7"+ selected) ; ignoring.append(selected) ; popup = False
+            if ((mx > popupX - 40 and mx < popupX) and (my > popupY + 11 and my < popupY + 22)) and mouse_action == 1: echo("§aCopied to clipboard!") ; mc.keyboardHandler.setClipboard(selected) ; popup = False
+
+        clicked = False
+
+        inc = reverse(incoming.copy())
+        out = reverse(outgoing.copy())
+
+        for i in range(19):
+            if ((mx > x and mx < x + 200) and (my > y + 192 - (10*i) and my < y + 202 - (10*i))): 
+                if i > -1 and mouse_action == 1 and len(inc)-1 >= i and can_select:
+                    show_popup(mx,my)
+                    selected = inc[i]
+                    clicked = True
+                    break
+        
+        for i in range(19):
+            if ((mx > x + 200 and mx < x + 400) and (my > y + 192 - (10*i) and my < y + 202 - (10*i))): 
+                if i > -1 and mouse_action == 1 and len(out)-1 >= i and can_select:
+                    show_popup(mx,my)
+                    selected = out[i]
+                    clicked = True
+                    break
+        
+        if not clicked and mouse_action == 1:
+            can_select = True
+            popup = False
+
+
+
+        if drag:
+            x = int(mx + xoff)
+            y = int(my + yoff)
+
+        rectangle(GuiGraphics,-2,-2,404,207,(255,20,20,20))
+        rectangle(GuiGraphics,0,0,400,203,(255,50,50,50))
+        rectangle(GuiGraphics,0,0,400,10,(255,100,100,100))
+        rectangle(GuiGraphics,0,10,400,2,(255,20,20,20))
+        rectangle(GuiGraphics,197,0,2,203,(255,20,20,20))
+        string(GuiGraphics,"Incoming",2,1,(255,255,255,255))
+        string(GuiGraphics,"Outgoing",201,1,(255,255,255,255))
+        string(GuiGraphics,"×",393,2,(255,255,30,30))
+        string(GuiGraphics,"_",385,0,(255,255,30,30))
+        string(GuiGraphics,"C",378,2,(255,255,30,30))
+
+        for i in range(min(20,len(inc)-1)):
+            string(GuiGraphics,inc[i],2,14+(10*i),(255,60,100,100))
+        
+        for i in range(min(20,len(out)-1)):
+            string(GuiGraphics,out[i],200,14+(10*i),(255,60,100,100))
+        
+        if popup:
+            stop = True
+            rectangle(GuiGraphics,popupX-42,popupY-2,44,26,(255,20,20,20),offset=False)
+            rectangle(GuiGraphics,popupX-40,popupY,40,22,(255,100,100,100),offset=False)
+            string(GuiGraphics,"Ignore",popupX-38,popupY+2,(255,255,255,255),offset=False)
+            string(GuiGraphics,"Copy",popupX-38,popupY+12,(255,255,255,255),offset=False)
+
+        else: stop = False
+    else:
+        if ((mx > x and mx < x + 31) and (my > y and my < y + 10)) and mouse_action == 1:
+            drag = True
+            xoff = x - mx
+            yoff = y - my
+        elif mouse_action == 0:
+            drag = False
+
+        if drag:
+            x = int(mx + xoff)
+            y = int(my + yoff)
+
+        rectangle(GuiGraphics,-2,-2,42,14,(255,20,20,20))
+        rectangle(GuiGraphics,0,0,38,10,(255,100,100,100))
+        string(GuiGraphics,"×",31,2,(255,255,30,30))
+        string(GuiGraphics,"■",23,2,(255,255,30,30))
+
+    mouse_action = -1
+
+def handle_mouse(m):
+    global mouse, mouse_action, collapsed, x, can_select, popup, incoming, outgoing
+    mouse = m.action
+    if m.action == 0:
+        mouse_action = 0
+    if m.action == 1:
+        mouse_action = 1
+    
+    mx = mc.mouseHandler.xpos() * mc.getWindow().getGuiScaledWidth() / mc.getWindow().getScreenWidth()
+    my = mc.mouseHandler.ypos() * mc.getWindow().getGuiScaledHeight() / mc.getWindow().getScreenHeight()
+    if not collapsed:
+        if ((mx > x + 391 and mx < x + 400) and (my > y and my < y + 10)) and mouse_action == 1:
+            sys.exit(1)
+        if ((mx > x + 383 and mx < x + 393) and (my > y and my < y + 10)) and mouse_action == 1:
+            collapsed = True
+            x += 362
+        if ((mx > x + 378 and mx < x + 382) and (my > y and my < y + 10)) and mouse_action == 1:
+            incoming = []
+            outgoing = []
+            echo("§aCleared!")
+    else:
+        if ((mx > x + 31 and mx < x + 38) and (my > y and my < y + 10)) and mouse_action == 1:
+            sys.exit(1)
+        if ((mx > x + 21 and mx < x + 30) and (my > y and my < y + 10)) and mouse_action == 1:
+            collapsed = False
+            can_select = True
+            popup = False
+            x -= 362
+
+def c2s_packets(event):
+    try:
+        _class = str(event.packet.getClass())
+        p = mappings.getPrettyClassName(_class.split(" ")[-1]).split(".")[-1]
+        if not stop and p not in ignoring: outgoing.append(p)
+        if len(outgoing) > 20: outgoing.pop(0)
+    except: log(f"Could not parse packet: {event.packet}")
+
+def s2c_packets(event):
+    try:
+        _class = str(event.packet.getClass())
+        p = mappings.getPrettyClassName(_class.split(" ")[-1]).split(".")[-1]
+        if not stop and p not in ignoring: incoming.append(p)
+        if len(incoming) > 20: incoming.pop(0)
+    except: log(f"Could not parse packet: {event.packet}")
+
+add_event_listener("serverbound_packet", c2s_packets)
+add_event_listener("clientbound_packet", s2c_packets)
+add_event_listener("mouse",handle_mouse)
+
+HudRenderCallback.EVENT.register(HudRenderCallback(ManagedCallback(render)))
