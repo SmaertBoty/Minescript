@@ -8,7 +8,7 @@ And i would like to ask you (🫵) for events you would like to see
 Example usage:
 ```py
 from system.lib.minescript import *
-import eventlib # Put it anywhere before registering the incoming chat listener 
+import eventlib # Put it anywhere before instancing event queue ("EventQueue()")
 
 events = EventQueue()
 events.register_incoming_chat_interceptor()
