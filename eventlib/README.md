@@ -12,9 +12,12 @@ import eventlib # Put it anywhere before instancing event queue ("EventQueue()")
 
 events = EventQueue()
 events.register_incoming_chat_interceptor()
+events.register_totem_popped_listener()
 
 while True:
     event = events.get()
     if event.type == EventType.INCOMING_CHAT_INTERCEPT:
         echo(f"Recieved: {event.message}")
+    if event.type == EventType.ENTITY_TOTEM_POPPED:
+        echo("Totem popped for: " + event.entity.name)
 ```
