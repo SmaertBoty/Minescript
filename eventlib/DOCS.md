@@ -3,7 +3,7 @@
 - [Incoming chat interceptor](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/Docs.md#incoming-chat-interceptor)
 - [Entity totem popped](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/Docs.md#entity-totem-popped)
 - [Entity died](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#entity-died)
-- Server particle
+- [Server particle](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#server-particle)
 ### Data Types
 - EntityData -> https://minescript.net/docs#entitydata
 - Packet:
