@@ -4,6 +4,8 @@ Requires 5.0b11 or higher
 As of now, it contains: 
 - `INCOMING_CHAT_INTERCEPT`
 - `ENTITY_TOTEM_POPPED`
+- `ENTITY_DIED`
+- `SERVER_PARTICLE`
 
 And i would like to ask you (🫵) for events you would like to see
 
