@@ -18,6 +18,7 @@ events = EventQueue()
 events.register_incoming_chat_interceptor()
 events.register_totem_popped_listener()
 events.register_entity_died_listener()
+events.register_server_particle_listener()
 
 while True:
     event = events.get()
