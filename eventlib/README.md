@@ -1,5 +1,5 @@
 Eventlib is a library aiming to add new events, while keeping minescripts `EventQueue`. It is a drag n' drop library, meaning you just import it, and you already have everything set up.
-Requires 5.0b11 or higher
+Requires 5.0b11 or higher, and mappings (`\install_mappings`)
 
 As of now, it contains: 
 - `INCOMING_CHAT_INTERCEPT`
