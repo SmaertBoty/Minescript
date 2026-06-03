@@ -1,10 +1,10 @@
-### Table of contents
-## Events
+## Table of contents
+### Events
 - [Incoming chat interceptor](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/Docs.md#incoming-chat-interceptor)
 - [Entity totem popped](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/Docs.md#entity-totem-popped)
 - Entity died
 - Server particle
-## Data Types
+### Data Types
 - EntityData -> https://minescript.net/docs#entitydata
 - Packet:
 ```
@@ -12,7 +12,7 @@ type: str
 position: tuple(float, float, float)
 ```
 
-
+## Listeners
 ### Incoming chat interceptor
 Intercepts all incoming messages, before they reach other parts of the client
 ```
