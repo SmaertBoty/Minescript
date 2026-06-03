@@ -17,6 +17,7 @@ import eventlib # Put it anywhere before instancing event queue ("EventQueue()")
 events = EventQueue()
 events.register_incoming_chat_interceptor()
 events.register_totem_popped_listener()
+events.register_entity_died_listener()
 
 while True:
     event = events.get()
@@ -24,4 +25,8 @@ while True:
         echo(f"Recieved: {event.message}")
     if event.type == EventType.ENTITY_TOTEM_POPPED:
         echo("Totem popped for: " + event.entity.name)
+    if event.type == EventType.ENTITY_DIED:
+        echo(f"{event.entity.name} died!")
+    if event.type == EventType.SERVER_PARTICLE:
+        echo(f"Particle {event.particle.type} appeared at {event.particle.position}")
 ```
