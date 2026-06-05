@@ -6,11 +6,9 @@
 - [Server particle](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#server-particle)
 ### Data Types
 - EntityData -> https://minescript.net/docs#entitydata
-- Packet:
-```
-type: str
-position: tuple(float, float, float)
-```
+
+### Syntax
+Use `from eventlib import *` for syntax checking
 
 ## Listeners
 ### Incoming chat interceptor
@@ -42,5 +40,23 @@ Triggers when a particle from the server appears
 ```
 listener: register_server_particle_listener()
 type: EventType.SERVER_PARTICLE
-particle: Particle
+particle: str
+x: float
+y: float
+z: float
+```
+
+### Health change
+Triggeres when the health of the local player changes
+```
+listener: register_health_change_listener()
+health: float
+```
+
+### Food change
+Triggeres when the hunger or saturation of the local player changes
+```
+listener: register_food_change_listener()
+hunger: float
+saturation: float
 ```
