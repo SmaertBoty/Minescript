@@ -24,6 +24,9 @@ events.register_incoming_chat_interceptor()
 events.register_totem_popped_listener()
 events.register_entity_died_listener()
 events.register_server_particle_listener()
+events.register_client_tick_listener()
+events.register_health_change_listener()
+events.register_food_change_listener()
 
 while True:
     event = events.get()
@@ -34,5 +37,11 @@ while True:
     if event.type == EventType.ENTITY_DIED:
         echo(f"{event.entity.name} died!")
     if event.type == EventType.SERVER_PARTICLE:
-        echo(f"Particle {event.particle.type} appeared at {event.particle.position}")
+        echo(f"Particle {event.particle} appeared at {event.x}, {event.y}, {event.z}")
+    if event.type == EventType.CLIENT_TICK:
+        echo(f"TICK! Current tick: {event.tick}")
+    if event.type == EventType.HEALTH_CHANGE:
+        echo(f"Health changed! Now at: {event.health}")
+    if event.type == EventType.FOOD_CHANGE:
+        echo(f"Food level changed! Hunger: {event.hunger}, Saturation: {event.saturation}")
 ```
