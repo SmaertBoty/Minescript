@@ -17,7 +17,7 @@ Docs: https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md
 Example usage:
 ```py
 from system.lib.minescript import *
-import eventlib # Put it anywhere before instancing event queue ("EventQueue()")
+from eventlib import * # Put it anywhere before instancing event queue ("EventQueue()")
 
 events = EventQueue()
 events.register_incoming_chat_interceptor()
