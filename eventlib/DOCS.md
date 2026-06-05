@@ -4,10 +4,11 @@
 - [Entity totem popped](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/Docs.md#entity-totem-popped)
 - [Entity died](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#entity-died)
 - [Server particle](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#server-particle)
+- [Health change](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#health-change)
 ### Data Types
 - EntityData -> https://minescript.net/docs#entitydata
 
-### Syntax
+## Syntax
 Use `from eventlib import *` for syntax checking
 
 ## Listeners
