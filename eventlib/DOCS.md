@@ -5,6 +5,7 @@
 - [Entity died](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#entity-died)
 - [Server particle](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#server-particle)
 - [Health change](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#health-change)
+- [Food change](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#food-change)
 ### Data Types
 - EntityData -> https://minescript.net/docs#entitydata
 
