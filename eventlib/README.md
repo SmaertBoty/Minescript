@@ -6,8 +6,13 @@ As of now, it contains:
 - `ENTITY_TOTEM_POPPED`
 - `ENTITY_DIED`
 - `SERVER_PARTICLE`
+- `CLIENT_TICK`
+- `HEALTH_CHANGE`
+- `FOOD_CHANGE`
 
 And i would like to ask you (🫵) for events you would like to see
+
+Docs: 
 
 Example usage:
 ```py
