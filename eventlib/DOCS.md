@@ -52,6 +52,7 @@ z: float
 Triggers when the health of the local player changes
 ```
 listener: register_health_change_listener()
+type: EventType.HEALTH_CHANGE
 health: float
 ```
 
@@ -59,6 +60,7 @@ health: float
 Triggers when the hunger or saturation of the local player changes
 ```
 listener: register_food_change_listener()
+type: EventType.FOOD_CHANGE
 hunger: float
 saturation: float
 ```
