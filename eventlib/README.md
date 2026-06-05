@@ -12,7 +12,7 @@ As of now, it contains:
 
 And i would like to ask you (🫵) for events you would like to see
 
-Docs: 
+Docs: https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md
 
 Example usage:
 ```py
