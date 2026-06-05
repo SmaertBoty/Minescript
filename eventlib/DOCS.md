@@ -1,7 +1,7 @@
 ## Table of contents
 ### Events
-- [Incoming chat interceptor](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/Docs.md#incoming-chat-interceptor)
-- [Entity totem popped](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/Docs.md#entity-totem-popped)
+- [Incoming chat interceptor](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#incoming-chat-interceptor)
+- [Entity totem popped](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#entity-totem-popped)
 - [Entity died](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#entity-died)
 - [Server particle](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#server-particle)
 - [Health change](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#health-change)
@@ -49,14 +49,14 @@ z: float
 ```
 
 ### Health change
-Triggeres when the health of the local player changes
+Triggers when the health of the local player changes
 ```
 listener: register_health_change_listener()
 health: float
 ```
 
 ### Food change
-Triggeres when the hunger or saturation of the local player changes
+Triggers when the hunger or saturation of the local player changes
 ```
 listener: register_food_change_listener()
 hunger: float
