@@ -2,7 +2,34 @@ import system.lib.minescript as m
 from system.lib.minescript import *
 from threading import Thread
 from system.lib.java import eval_pyjinn_script as eps
-from time import sleep
+import socket
+import json
+import uuid
+from queue import Queue as qQ
+
+identifier = str(uuid.uuid8())
+
+bridge = socket.socket()
+bridge.bind(("127.0.0.1", 0))
+bridge.listen(1)
+port = bridge.getsockname()[1]
+
+def __serve_listener__():
+    while True:
+        line = file.readline()
+        if not line:
+            continue
+        try: 
+            event = json.loads(line)
+            if event["event"] == "intercept_incoming_chat":
+                incoming_intercept_queue.put(event["message"])
+            elif event["event"] == "entity_totem_popped":
+                totem_popped_queue.put(event["uuid"])
+            elif event["event"] == "entity_died":
+                entity_died_queue.put(event["uuid"])
+            elif event["event"] == "server_particle":
+                particle_queue.put((event["particle"],event["x"],event["y"],event["z"]))
+        except: log("Malformed json event:", f"'{line}'")
 
 script = eps(
 r"""
@@ -12,50 +39,51 @@ ClientboundSystemChatPacket = JavaClass("net.minecraft.network.protocol.game.Cli
 ClientboundEntityEventPacket = JavaClass("net.minecraft.network.protocol.game.ClientboundEntityEventPacket")
 ClientboundLevelParticlesPacket = JavaClass("net.minecraft.network.protocol.game.ClientboundLevelParticlesPacket")
 BuiltInRegistries = JavaClass("net.minecraft.core.registries.BuiltInRegistries")
-System = JavaClass("java.lang.System")
-incoming_intercept_queue = []
-totem_popped_queue = []
-entity_died_queue = []
-particle_queue = []
-def get_incoming_intercept_queue():
-    global incoming_intercept_queue
-    out = incoming_intercept_queue
-    incoming_intercept_queue = []
-    return str(out)
-def get_totem_popped_queue():
-    global totem_popped_queue
-    out = totem_popped_queue
-    totem_popped_queue = []
-    return str(out)
-def get_entity_died_queue():
-    global entity_died_queue
-    out = entity_died_queue
-    entity_died_queue = []
-    return str(out)
-def get_particle_queue():
-    global particle_queue
-    out = particle_queue
-    particle_queue = []
-    return str(out)
+BufferedWriter = JavaClass("java.io.BufferedWriter")
+OutputStreamWriter = JavaClass("java.io.OutputStreamWriter")
+Socket = JavaClass("java.net.Socket")
+StandardCharsets = JavaClass("java.nio.charset.StandardCharsets")
+
+identifier = '""" + identifier + r"""'
+if "eventlib" not in __script__.vars["game"]:
+    __script__.vars["game"]["eventlib"] = {}
+__script__.vars["game"]["eventlib"][identifier] = {"intercept_incoming_chat":False,"entity_totem_popped":False,"entity_died":False,"server_particle":False}
+bridge = Socket("127.0.0.1", """ + str(port) + r""")
+writer = BufferedWriter(OutputStreamWriter(bridge.getOutputStream(), StandardCharsets.UTF_8))
+
+def add_event(event):
+    writer.write(event + "\n")
+    writer.flush()
+
 def s2c(event):
-    if isinstance(event.packet, ClientboundSystemChatPacket):
-        incoming_intercept_queue.append(event.packet.content().getString())
-        event.cancel()
-    elif isinstance(event.packet, ClientboundPlayerChatPacket):
-        try: incoming_intercept_queue.append(event.packet.unsignedContent().getString())
-        except: incoming_intercept_queue.append(event.packet.body().content())
-        event.cancel()
-    elif isinstance(event.packet, ClientboundEntityEventPacket):
-        if int(event.packet.getEventId()) == 35: totem_popped_queue.append(event.packet.getEntity(mc.level).getStringUUID())
-        elif int(event.packet.getEventId()) == 3: entity_died_queue.append(event.packet.getEntity(mc.level).getStringUUID())
-    elif isinstance(event.packet, ClientboundLevelParticlesPacket): particle_queue.append(f"{BuiltInRegistries.PARTICLE_TYPE.getKey(event.packet.getParticle().getType()).toString()};{event.packet.getX()};{event.packet.getY()};{event.packet.getZ()}")
+    if __script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]:
+        if isinstance(event.packet, ClientboundSystemChatPacket):
+            add_event('{"event":"intercept_incoming_chat","message":"' + event.packet.content().getString() + '"}')
+            event.cancel()
+        elif isinstance(event.packet, ClientboundPlayerChatPacket):
+            try: add_event('{"event":"intercept_incoming_chat","message":"' + event.packet.unsignedContent().getString() + '"}')
+            except: add_event('{"event":"intercept_incoming_chat","message":"' + event.packet.body().content() + '"}')
+            event.cancel()
+
+    if isinstance(event.packet, ClientboundEntityEventPacket):
+        if __script__.vars["game"]["eventlib"][identifier]["entity_totem_popped"]:
+            if int(event.packet.getEventId()) == 35: add_event('{"event":"entity_totem_popped","uuid":"' + event.packet.getEntity(mc.level).getStringUUID() + '"}')
+        if __script__.vars["game"]["eventlib"][identifier]["entity_died"]:
+            if int(event.packet.getEventId()) == 3: add_event('{"event":"entity_died","uuid":"' + event.packet.getEntity(mc.level).getStringUUID() + '"}')
+    
+    if __script__.vars["game"]["eventlib"][identifier]["server_particle"]:
+        if isinstance(event.packet, ClientboundLevelParticlesPacket): add_event('{"event":"server_particle","particle":"' + BuiltInRegistries.PARTICLE_TYPE.getKey(event.packet.getParticle().getType()).toString() + '","x":event.packet.getX(),"y":event.packet.getY(),"z":event.packet.getZ()}')
 add_event_listener("clientbound_packet",s2c)
 """)
+conn, _ = bridge.accept()
+file = conn.makefile()
 
-get_incoming_intercept_queue = script.get("get_incoming_intercept_queue")
-get_totem_popped_queue = script.get("get_totem_popped_queue")
-get_entity_died_queue = script.get("get_entity_died_queue")
-get_particle_queue = script.get("get_particle_queue")
+incoming_intercept_queue = qQ()
+totem_popped_queue = qQ()
+entity_died_queue = qQ()
+particle_queue = qQ()
+
+Thread(target=__serve_listener__).start()
 
 class INCOMING_CHAT_INTERCEPT:
     def __init__(self,type,message):
@@ -95,47 +123,47 @@ m.EventType.SERVER_PARTICLE = "server_particle"
 m._EVENT_CONSTRUCTORS["server_particle"] = SERVER_PARTICLE
 
 def register_incoming_chat_interceptor(self):
+    execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["intercept_incoming_chat"] = True'""")
     def worker():
         while True:
-            events = eval(get_incoming_intercept_queue())
-            for event in events:
-                self.queue.put({
-                    "type": m.EventType.INCOMING_CHAT_INTERCEPT,
-                    "message": event
-                })
+            event = incoming_intercept_queue.get()
+            self.queue.put({
+                "type": m.EventType.INCOMING_CHAT_INTERCEPT,
+                "message": event
+            })
     Thread(target=worker, daemon=True).start()
 
 def register_totem_popped_listener(self):
+    execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["entity_totem_popped"] = True'""")
     def worker():
         while True:
-            events = eval(get_totem_popped_queue())
-            for event in events:
-                self.queue.put({
-                    "type": m.EventType.ENTITY_TOTEM_POPPED,
-                    "entity": [e for e in entities() if e.uuid == event][0]
-                })
+            event = totem_popped_queue.get()
+            self.queue.put({
+                "type": m.EventType.ENTITY_TOTEM_POPPED,
+                "entity": [e for e in entities() if e.uuid == event][0]
+            })
     Thread(target=worker, daemon=True).start()
 
 def register_entity_died_listener(self):
+    execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["entity_died"] = True'""")
     def worker():
         while True:
-            events = eval(get_entity_died_queue())
-            for event in events:
-                self.queue.put({
-                    "type": m.EventType.ENTITY_DIED,
-                    "entity": [e for e in entities() if e.uuid == event][0]
-                })
+            event = entity_died_queue.get()
+            self.queue.put({
+                "type": m.EventType.ENTITY_DIED,
+                "entity": [e for e in entities() if e.uuid == event][0]
+            })
     Thread(target=worker, daemon=True).start()
 
 def register_server_particle_listener(self):
+    execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["server_particle"] = True'""")
     def worker():
         while True:
-            events = eval(get_particle_queue())
-            for event in events:
-                self.queue.put({
-                    "type": m.EventType.SERVER_PARTICLE,
-                    "particle": Particle(*event.split(";"))
-                })
+            event = particle_queue.get()
+            self.queue.put({
+                "type": m.EventType.SERVER_PARTICLE,
+                "particle": Particle(*event)
+            })
     Thread(target=worker, daemon=True).start()
 
 m.EventQueue.register_incoming_chat_interceptor = register_incoming_chat_interceptor
