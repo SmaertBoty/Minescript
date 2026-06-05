@@ -6,6 +6,7 @@ import socket
 import json
 import uuid
 from queue import Queue as qQ
+from typing import TYPE_CHECKING
 
 identifier = str(uuid.uuid8())
 
@@ -28,7 +29,13 @@ def __serve_listener__():
             elif event["event"] == "entity_died":
                 entity_died_queue.put(event["uuid"])
             elif event["event"] == "server_particle":
-                particle_queue.put((event["particle"],event["x"],event["y"],event["z"]))
+                particle_queue.put((event["particle"],float(event["x"]),float(event["y"]),float(event["z"])))
+            elif event["event"] == "client_tick":
+                client_tick_queue.put(int(event["tick"]))
+            elif event["event"] == "health_change":
+                health_change_queue.put(float(event["health"]))
+            elif event["food_change"]:
+                food_change_queue.put((float(event[""])))
         except: log("Malformed json event:", f"'{line}'")
 
 script = eps(
@@ -47,9 +54,11 @@ StandardCharsets = JavaClass("java.nio.charset.StandardCharsets")
 identifier = '""" + identifier + r"""'
 if "eventlib" not in __script__.vars["game"]:
     __script__.vars["game"]["eventlib"] = {}
-__script__.vars["game"]["eventlib"][identifier] = {"intercept_incoming_chat":False,"entity_totem_popped":False,"entity_died":False,"server_particle":False}
+__script__.vars["game"]["eventlib"][identifier] = {"intercept_incoming_chat":False,"entity_totem_popped":False,"entity_died":False,"server_particle":False,"client_tick":False,"health_change":False,"food_change":False}
 bridge = Socket("127.0.0.1", """ + str(port) + r""")
 writer = BufferedWriter(OutputStreamWriter(bridge.getOutputStream(), StandardCharsets.UTF_8))
+hp = player_health()
+food = [mc.player.getFoodData().getFoodLevel(),mc.player.getFoodData().getSaturationLevel()]
 
 def add_event(event):
     writer.write(event + "\n")
@@ -72,7 +81,23 @@ def s2c(event):
             if int(event.packet.getEventId()) == 3: add_event('{"event":"entity_died","uuid":"' + event.packet.getEntity(mc.level).getStringUUID() + '"}')
     
     if __script__.vars["game"]["eventlib"][identifier]["server_particle"]:
-        if isinstance(event.packet, ClientboundLevelParticlesPacket): add_event('{"event":"server_particle","particle":"' + BuiltInRegistries.PARTICLE_TYPE.getKey(event.packet.getParticle().getType()).toString() + '","x":event.packet.getX(),"y":event.packet.getY(),"z":event.packet.getZ()}')
+        if isinstance(event.packet, ClientboundLevelParticlesPacket): add_event('{"event":"server_particle","particle":"' + BuiltInRegistries.PARTICLE_TYPE.getKey(event.packet.getParticle().getType()).toString() + '","x":str(event.packet.getX()),"y":str(event.packet.getY()),"z":str(event.packet.getZ())}')
+
+def tick(event):
+    global hp, food
+    if __script__.vars["game"]["eventlib"][identifier]["client_tick"]:
+        add_event('{"event":"client_tick","tick":' + str(world_info().game_ticks) + '}')
+    if __script__.vars["game"]["eventlib"][identifier]["health_change"]:
+        if hp != player_health():
+            add_event('{"event":"health_change","health":' + str(player_health()) + '}')
+            hp = player_health()
+    if __script__.vars["game"]["eventlib"][identifier]["food_change"]:
+        new_food = [mc.player.getFoodData().getFoodLevel(),mc.player.getFoodData().getSaturationLevel()]
+        if food != new_food:
+            add_event('{"event":"food_change","food":' + str(new_food[0]) + ',"saturation":' + str(new_food[1]) + '}')
+            food = new_food
+    
+add_event_listener("tick",tick)
 add_event_listener("clientbound_packet",s2c)
 """)
 conn, _ = bridge.accept()
@@ -82,6 +107,9 @@ incoming_intercept_queue = qQ()
 totem_popped_queue = qQ()
 entity_died_queue = qQ()
 particle_queue = qQ()
+client_tick_queue = qQ()
+health_change_queue = qQ()
+food_change_queue = qQ()
 
 Thread(target=__serve_listener__).start()
 
@@ -105,10 +133,20 @@ class SERVER_PARTICLE:
         self.type = type
         self.particle = particle
 
-class Particle:
-    def __init__(self,type,x,y,z):
+class CLIENT_TICK:
+    def __init__(self,type,tick):
         self.type = type
-        self.position = (float(x),float(y),float(z))
+        self.tick = tick
+
+class HEALTH_CHANGE:
+    def __init__(self,type,health):
+        self.type = type
+        self.health = health
+
+class FOOD_CHANGE:
+    def __init__(self,hunger,saturation):
+        self.hunger = hunger
+        self.saturation = saturation
 
 m.EventType.INCOMING_CHAT_INTERCEPT = "incoming_chat_intercept"
 m._EVENT_CONSTRUCTORS["incoming_chat_intercept"] = INCOMING_CHAT_INTERCEPT
@@ -121,6 +159,15 @@ m._EVENT_CONSTRUCTORS["entity_died"] = ENTITY_DIED
 
 m.EventType.SERVER_PARTICLE = "server_particle"
 m._EVENT_CONSTRUCTORS["server_particle"] = SERVER_PARTICLE
+
+m.EventType.CLIENT_TICK = "client_tick"
+m._EVENT_CONSTRUCTORS["client_tick"] = CLIENT_TICK
+
+m.EventType.HEALTH_CHANGE = "health_change"
+m._EVENT_CONSTRUCTORS["health_change"] = HEALTH_CHANGE
+
+m.EventType.FOOD_CHANGE = "food_change"
+m._EVENT_CONSTRUCTORS["food_change"] = FOOD_CHANGE
 
 def register_incoming_chat_interceptor(self):
     execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["intercept_incoming_chat"] = True'""")
@@ -162,7 +209,44 @@ def register_server_particle_listener(self):
             event = particle_queue.get()
             self.queue.put({
                 "type": m.EventType.SERVER_PARTICLE,
-                "particle": Particle(*event)
+                "particle": event[0],
+                "x": event[1],
+                "y": event[2],
+                "z": event[3]
+            })
+    Thread(target=worker, daemon=True).start()
+
+def register_client_tick_listener(self):
+    execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["client_tick"] = True'""")
+    def worker():
+        while True:
+            event = client_tick_queue.get()
+            self.queue.put({
+                "type": m.EventType.CLIENT_TICK,
+                "tick": event
+            })
+    Thread(target=worker, daemon=True).start()
+
+def register_health_change_listener(self):
+    execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["health_change"] = True'""")
+    def worker():
+        while True:
+            event = health_change_queue.get()
+            self.queue.put({
+                "type": m.EventType.HEALTH_CHANGE,
+                "health": event
+            })
+    Thread(target=worker, daemon=True).start()
+
+def register_food_change_listener(self):
+    execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["food_change"] = True'""")
+    def worker():
+        while True:
+            event = health_change_queue.get()
+            self.queue.put({
+                "type": m.EventType.FOOD_CHANGE,
+                "hunger": event[0],
+                "saturation": event[1]
             })
     Thread(target=worker, daemon=True).start()
 
@@ -170,3 +254,23 @@ m.EventQueue.register_incoming_chat_interceptor = register_incoming_chat_interce
 m.EventQueue.register_totem_popped_listener = register_totem_popped_listener
 m.EventQueue.register_entity_died_listener = register_entity_died_listener
 m.EventQueue.register_server_particle_listener = register_server_particle_listener
+m.EventQueue.register_client_tick_listener = register_client_tick_listener
+m.EventQueue.register_health_change_listener = register_health_change_listener
+m.EventQueue.register_food_change_listener = register_food_change_listener
+
+if TYPE_CHECKING:
+    class EventQueue:
+        def register_incoming_chat_interceptor(self): ...
+        def register_totem_popped_listener(self): ...
+        def register_entity_died_listener(self): ...
+        def register_server_particle_listener(self): ...
+        def register_client_tick_listener(self): ...
+        def register_health_change_listener(self): ...
+        def register_food_change_listener(self): ...
+    EventType.INCOMING_CHAT_INTERCEPT = "incoming_chat_intercept"
+    EventType.ENTITY_TOTEM_POPPED = "entity_totem_popped"
+    EventType.ENTITY_DIED = "entity_died"
+    EventType.SERVER_PARTICLE = "server_particle"
+    EventType.CLIENT_TICK = "client_tick"
+    EventType.HEALTH_CHANGE = "health_change"
+    EventType.FOOD_CHANGE = "food_change"
