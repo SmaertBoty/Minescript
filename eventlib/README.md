@@ -20,7 +20,7 @@ from system.lib.minescript import EventQueue, echo
 from eventlib import * # Put it anywhere before instancing event queue ("EventQueue()")
 
 events = EventQueue()
-events.register_incoming_chat_interceptor()
+events.register_incoming_chat_interceptor(startswith="+")
 events.register_totem_popped_listener()
 events.register_entity_died_listener()
 events.register_server_particle_listener()
