@@ -7,6 +7,7 @@ import json
 import uuid
 from queue import Queue as qQ
 from typing import TYPE_CHECKING
+from dataclasses import dataclass
 
 identifier = str(uuid.uuid8())
 
@@ -54,7 +55,7 @@ StandardCharsets = JavaClass("java.nio.charset.StandardCharsets")
 identifier = '""" + identifier + r"""'
 if "eventlib" not in __script__.vars["game"]:
     __script__.vars["game"]["eventlib"] = {}
-__script__.vars["game"]["eventlib"][identifier] = {"intercept_incoming_chat":False,"entity_totem_popped":False,"entity_died":False,"server_particle":False,"client_tick":False,"health_change":False,"food_change":False}
+__script__.vars["game"]["eventlib"][identifier] = {"intercept_incoming_chat":{"state":False,"startswith":""},"entity_totem_popped":False,"entity_died":False,"server_particle":False,"client_tick":False,"health_change":False,"food_change":False}
 bridge = Socket("127.0.0.1", """ + str(port) + r""")
 writer = BufferedWriter(OutputStreamWriter(bridge.getOutputStream(), StandardCharsets.UTF_8))
 hp = player_health()
@@ -65,14 +66,17 @@ def add_event(event):
     writer.flush()
 
 def s2c(event):
-    if __script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]:
+    if __script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["state"]:
         if isinstance(event.packet, ClientboundSystemChatPacket):
-            add_event('{"event":"intercept_incoming_chat","message":"' + event.packet.content().getString() + '"}')
-            event.cancel()
+            if event.packet.content().getString().startswith(__script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["startswith"]):
+                add_event('{"event":"intercept_incoming_chat","message":"' + event.packet.content().getString() + '"}')
+                event.cancel()
         elif isinstance(event.packet, ClientboundPlayerChatPacket):
-            try: add_event('{"event":"intercept_incoming_chat","message":"' + event.packet.unsignedContent().getString() + '"}')
-            except: add_event('{"event":"intercept_incoming_chat","message":"' + event.packet.body().content() + '"}')
-            event.cancel()
+            try: dat = event.packet.unsignedContent().getString()
+            except: dat = event.packet.body().content()
+            if dat.startswith(__script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["startswith"]):
+                add_event('{"event":"intercept_incoming_chat","message":"' + dat + '"}')
+                event.cancel()
 
     if isinstance(event.packet, ClientboundEntityEventPacket):
         if __script__.vars["game"]["eventlib"][identifier]["entity_totem_popped"]:
@@ -113,40 +117,44 @@ food_change_queue = qQ()
 
 Thread(target=__serve_listener__).start()
 
+@dataclass
 class INCOMING_CHAT_INTERCEPT:
-    def __init__(self,type,message):
-        self.type = type
-        self.message = message
+    type:str
+    message:str
 
+@dataclass
 class ENTITY_TOTEM_POPPED:
-    def __init__(self,type,entity):
-        self.type = type
-        self.entity = entity
+    type:str
+    entity:EntityData
 
+@dataclass
 class ENTITY_DIED:
-    def __init__(self,type,entity):
-        self.type = type
-        self.entity = entity
+    type:str
+    entity:EntityData
 
+@dataclass
 class SERVER_PARTICLE:
-    def __init__(self,type,particle):
-        self.type = type
-        self.particle = particle
+    type:str
+    particle:str
+    x:float
+    y:float
+    z:float
 
+@dataclass
 class CLIENT_TICK:
-    def __init__(self,type,tick):
-        self.type = type
-        self.tick = tick
+    type:str
+    tick:int
 
+@dataclass
 class HEALTH_CHANGE:
-    def __init__(self,type,health):
-        self.type = type
-        self.health = health
+    type:str
+    health:float
 
+@dataclass
 class FOOD_CHANGE:
-    def __init__(self,hunger,saturation):
-        self.hunger = hunger
-        self.saturation = saturation
+    type:str
+    hunger:float
+    saturation:float
 
 m.EventType.INCOMING_CHAT_INTERCEPT = "incoming_chat_intercept"
 m._EVENT_CONSTRUCTORS["incoming_chat_intercept"] = INCOMING_CHAT_INTERCEPT
@@ -169,8 +177,8 @@ m._EVENT_CONSTRUCTORS["health_change"] = HEALTH_CHANGE
 m.EventType.FOOD_CHANGE = "food_change"
 m._EVENT_CONSTRUCTORS["food_change"] = FOOD_CHANGE
 
-def register_incoming_chat_interceptor(self):
-    execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["intercept_incoming_chat"] = True'""")
+def register_incoming_chat_interceptor(self,*,startswith:str=""):
+    execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["intercept_incoming_chat"] = {"{"}"state":True,"startswith":"{startswith}"{"}"}'""")
     def worker():
         while True:
             event = incoming_intercept_queue.get()
@@ -260,17 +268,53 @@ m.EventQueue.register_food_change_listener = register_food_change_listener
 
 if TYPE_CHECKING:
     class EventQueue:
-        def register_incoming_chat_interceptor(self): ...
+        def register_incoming_chat_interceptor(self,*,startswith:str=""): ...
         def register_totem_popped_listener(self): ...
         def register_entity_died_listener(self): ...
         def register_server_particle_listener(self): ...
         def register_client_tick_listener(self): ...
         def register_health_change_listener(self): ...
         def register_food_change_listener(self): ...
-    EventType.INCOMING_CHAT_INTERCEPT = "incoming_chat_intercept"
-    EventType.ENTITY_TOTEM_POPPED = "entity_totem_popped"
-    EventType.ENTITY_DIED = "entity_died"
-    EventType.SERVER_PARTICLE = "server_particle"
-    EventType.CLIENT_TICK = "client_tick"
-    EventType.HEALTH_CHANGE = "health_change"
-    EventType.FOOD_CHANGE = "food_change"
+        def get(self, block: bool = True, timeout: float = None) -> Event:
+            """Gets the next event in the queue.
+
+            Args:
+              block: if `True`, block until an event fires
+              timeout: timeout in seconds to wait for an event if `block` is `True`
+        
+            Returns:
+              subclass-dependent event
+        
+            Raises:
+              `queue.Empty` if `block` is `True` and `timeout` expires, or `block` is `False` and
+              queue is empty.
+            """
+    class EventType(m._EventType):
+        INCOMING_CHAT_INTERCEPT:str = "incoming_chat_intercept"
+        ENTITY_TOTEM_POPPED:str = "entity_totem_popped"
+        ENTITY_DIED:str = "entity_died"
+        SERVER_PARTICLE:str = "server_particle"
+        CLIENT_TICK:str = "client_tick"
+        HEALTH_CHANGE:str = "health_change"
+        FOOD_CHANGE:str = "food_change"
+    class Event:
+        type:str
+        time:float
+        message:str
+        entity:EntityData
+        position:BlockPos|Vector3f
+        old_state:str
+        new_state:str
+        player_uuid:str
+        item:ItemStack
+        amount:int
+        entity_uuid:str
+        cause_uuid:str
+        source:str
+        blockpack_base64:str
+        loaded:bool
+        x_min:int
+        z_min:int
+        x_max:int
+        z_max:int
+        connected:bool
