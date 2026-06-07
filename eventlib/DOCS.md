@@ -14,9 +14,9 @@ Use `from eventlib import *` for syntax checking
 
 ## Listeners
 ### Incoming chat interceptor
-Intercepts all incoming messages, before they reach other parts of the client
+Intercepts all incoming messages, before they reach other parts of the client. Can be filtered to only intercept messages that start with a specific character
 ```
-listener: register_incoming_chat_interceptor()
+listener: register_incoming_chat_interceptor(*,startswith="")
 type: EventType.INCOMING_CHAT_INTERCEPT
 message: str
 ```
