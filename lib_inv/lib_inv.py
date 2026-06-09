@@ -138,5 +138,3 @@ def get_item(slot) -> dict:
     Get the item from a slot
     """
     return json.loads(await_function_call("get_item",str(slot)))
-
-print(inventory())
