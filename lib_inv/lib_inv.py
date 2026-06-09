@@ -20,6 +20,7 @@ StandardCharsets = JavaClass("java.nio.charset.StandardCharsets")
 BufferedReader = JavaClass("java.io.BufferedReader")
 InputStreamReader = JavaClass("java.io.InputStreamReader")
 ClickType = JavaClass("net.minecraft.world.inventory.ClickType")
+RegistryOps = JavaClass("net.minecraft.resources.RegistryOps")
 
 bridge = Socket("127.0.0.1", """ + str(port) + r""")
 bridge.setSoTimeout(1)
@@ -34,7 +35,7 @@ def return_call(data):
     writer.flush()
 
 def serialize_stack(itemstack):
-    return GsonBuilder().create().toJson(ItemStack.CODEC.encodeStart(JsonOps.INSTANCE, itemstack).getOrThrow())
+    return GsonBuilder().create().toJson(ItemStack.CODEC.encodeStart(RegistryOps.create(JsonOps.INSTANCE, mc.level.registryAccess()), itemstack).getOrThrow())
 
 def inventory():
     out = []
@@ -137,3 +138,5 @@ def get_item(slot) -> dict:
     Get the item from a slot
     """
     return json.loads(await_function_call("get_item",str(slot)))
+
+print(inventory())
