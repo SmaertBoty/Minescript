@@ -9,6 +9,7 @@ As of now, it contains:
 - `CLIENT_TICK`
 - `HEALTH_CHANGE`
 - `FOOD_CHANGE`
+- `ACTIONBAR_CHANGE`
 
 And i would like to ask you (🫵) for events you would like to see
 
