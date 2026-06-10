@@ -1,3 +1,5 @@
+debug = False
+
 import socket
 from system.lib.java import eval_pyjinn_script as eps
 import json
@@ -53,7 +55,7 @@ def pickup(slot,mouse):
 def quickmove(slot,mouse):
     slot = int(slot)
     mouse = int(mouse)
-    mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId, slot, mouse, ClickType.QUICKMOVE, mc.player)
+    mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId, slot, mouse, ClickType.QUICK_MOVE, mc.player)
 
 def swap(slot1,slot2):
     slot1 = int(slot1)
@@ -82,7 +84,9 @@ callables = {
 
 def frame(_):
     try: line = reader.readLine()
-    except: return
+    except Exception as e:
+        if """ + str(debug) + r""": echo(e)
+        return
     if line:
         cmd = line.split(":")
         if cmd[1]: return_call(callables[cmd[0]](*cmd[1].split(",")))
@@ -103,9 +107,9 @@ def await_function_call(func_name,*args):
         else: break
     return line[:-1]
 
-def inventory() -> dict[dict]:
+def inventory() -> list[dict]:
     """
-    Returns the entire player inventory, as a dict
+    Returns the entire player inventory, as a list of dicts
     """
     return json.loads(await_function_call("inventory"))
 
