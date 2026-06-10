@@ -8,6 +8,7 @@ import uuid
 from queue import Queue as qQ
 from typing import TYPE_CHECKING
 from dataclasses import dataclass
+from time import time
 
 identifier = str(uuid.uuid8())
 
@@ -39,6 +40,8 @@ def __serve_listener__():
                 food_change_queue.put((float(event["food"]),float(event["saturation"])))
             elif event["event"] == "actionbar_change":
                 actionbar_change_queue.put(event["message"])
+            elif event["event"] == "chat_event":
+                chat_queue.put((event["text"],event["json"]))
         except: log(f"Malformed json event: '{line}'")
 
 script = eps(
@@ -69,7 +72,7 @@ def reflect_field(_class, field_name):
 identifier = '""" + identifier + r"""'
 if "eventlib" not in __script__.vars["game"]:
     __script__.vars["game"]["eventlib"] = {}
-__script__.vars["game"]["eventlib"][identifier] = {"intercept_incoming_chat":{"state":False,"startswith":""},"entity_totem_popped":False,"entity_died":False,"server_particle":False,"client_tick":False,"health_change":False,"food_change":False,"actionbar_change":False}
+__script__.vars["game"]["eventlib"][identifier] = {"intercept_incoming_chat":{"state":False,"startswith":""},"entity_totem_popped":False,"entity_died":False,"server_particle":False,"client_tick":False,"health_change":False,"food_change":False,"actionbar_change":False,"chat_listener":False}
 bridge = Socket("127.0.0.1", """ + str(port) + r""")
 writer = BufferedWriter(OutputStreamWriter(bridge.getOutputStream(), StandardCharsets.UTF_8))
 hp = player_health()
@@ -81,7 +84,7 @@ def add_event(event):
     writer.flush()
 
 def s2c(event):
-    if __script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["state"]:
+    if __script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["state"] or __script__.vars["game"]["eventlib"][identifier]["chat_listener"]:
         if isinstance(event.packet, ClientboundSystemChatPacket):
             if event.packet.overlay(): return
             comp = event.packet.content()
@@ -92,9 +95,12 @@ def s2c(event):
             comp = event.packet.body()
             json_string = '{"text":"' + dat + '"}'
         else: return
-        if dat.startswith(__script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["startswith"]):
-            add_event('{"event":"intercept_incoming_chat","text":"' + dat + '","json":' + json_string + '}')
-            event.cancel()
+        if __script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["state"]:
+            if dat.startswith(__script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["startswith"]):
+                add_event('{"event":"intercept_incoming_chat","text":"' + dat + '","json":' + json_string + '}')
+                event.cancel()
+        elif __script__.vars["game"]["eventlib"][identifier]["chat_listener"]:
+            add_event('{"event":"chat_event","text":"' + dat + '","json":' + json_string + '}')
 
     if isinstance(event.packet, ClientboundEntityEventPacket):
         if __script__.vars["game"]["eventlib"][identifier]["entity_totem_popped"]:
@@ -144,6 +150,7 @@ client_tick_queue = qQ()
 health_change_queue = qQ()
 food_change_queue = qQ()
 actionbar_change_queue = qQ()
+chat_queue = qQ()
 
 Thread(target=__serve_listener__).start()
 
@@ -191,6 +198,13 @@ class FOOD_CHANGE:
 class ACTIONBAR_CHANGE:
     type:str
     message:str
+
+class EventlibChatEvent:
+    def __init__(self,type,time,message,json=None):
+        self.type = type
+        self.time = time
+        self.message = message
+        self.json = json
 
 m.EventType.INCOMING_CHAT_INTERCEPT = "incoming_chat_intercept"
 m._EVENT_CONSTRUCTORS["incoming_chat_intercept"] = INCOMING_CHAT_INTERCEPT
@@ -317,6 +331,22 @@ def register_actionbar_change_listener(self):
             })
     Thread(target=worker, daemon=True).start()
 
+def eventlib_register_chat_listener(self,*,eventlib=False):
+    if eventlib: 
+        execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["chat_listener"] = True'""")
+        self.eventlib_listeners.append("chat_listener")
+        def worker():
+            while True:
+                event = chat_queue.get()
+                self.queue.put({
+                    "type": m.EventType.CHAT,
+                    "message": event[0],
+                    "json": event[1],
+                    "time": time()
+                })
+        Thread(target=worker, daemon=True).start()
+    else: self._register(m.EventType.CHAT, m._register_chat_message_listener)
+
 def unregister_all(self):
     for event in self.eventlib_listeners:
         if event != "intercept_incoming_chat": execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["{event}"] = False'""")
@@ -335,6 +365,8 @@ m.EventQueue.register_client_tick_listener = register_client_tick_listener
 m.EventQueue.register_health_change_listener = register_health_change_listener
 m.EventQueue.register_food_change_listener = register_food_change_listener
 m.EventQueue.register_actionbar_change_listener = register_actionbar_change_listener
+m.EventQueue.register_chat_listener = eventlib_register_chat_listener
+m._EVENT_CONSTRUCTORS["chat"] = EventlibChatEvent
 
 m.EventQueue.unregister_all = unregister_all
 m.EventQueue.eventlib_listeners = []
@@ -363,6 +395,21 @@ if TYPE_CHECKING:
             Raises:
               `queue.Empty` if `block` is `True` and `timeout` expires, or `block` is `False` and
               queue is empty.
+            """
+        def register_chat_listener(self,*,eventlib:bool=False):
+            """Registers listener for `EventType.CHAT` events as `ChatEvent`.
+        
+            Example:
+            ```
+              with EventQueue() as event_queue:
+                event_queue.register_chat_listener()
+                while True:
+                  event = event_queue.get()
+                  if event.type == EventType.CHAT:
+                    if not event.message.startswith("> "):
+                      echo(f"> Got chat message: {event.message}")
+            ```
+            If `eventlib` is `True`, extra data will be attached
             """
         def unregister_all(): ...
     class EventType(m._EventType):
