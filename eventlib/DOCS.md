@@ -78,3 +78,4 @@ message: str
 ### Chat event
 - Populate a `json` field with the chat messages raw json, if eventlib is enabled in the registering function, otherwise it uses the builtin protocol
 - `register_chat_listener(eventlib=True)`
+- Optional, `False` by default
