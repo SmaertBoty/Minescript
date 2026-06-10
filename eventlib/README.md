@@ -28,21 +28,31 @@ events.register_server_particle_listener()
 events.register_client_tick_listener()
 events.register_health_change_listener()
 events.register_food_change_listener()
+events.register_actionbar_change_listener()
+
+events.register_chat_listener(eventlib=True) # Enables the .json value on the event
 
 while True:
     event = events.get()
     if event.type == EventType.INCOMING_CHAT_INTERCEPT:
-        echo(f"Recieved: {event.message}")
+        echo(f";Recieved: {event.message}")
+        echo(f";Raw json: {event.json}")
     if event.type == EventType.ENTITY_TOTEM_POPPED:
-        echo("Totem popped for: " + event.entity.name)
+        echo(";Totem popped for: " + event.entity.name)
     if event.type == EventType.ENTITY_DIED:
-        echo(f"{event.entity.name} died!")
+        echo(f";{event.entity.name} died!")
     if event.type == EventType.SERVER_PARTICLE:
-        echo(f"Particle {event.particle} appeared at {event.x}, {event.y}, {event.z}")
+        echo(f";Particle {event.particle} appeared at {event.x}, {event.y}, {event.z}")
     if event.type == EventType.CLIENT_TICK:
-        echo(f"TICK! Current tick: {event.tick}")
+        echo(f";TICK! Current tick: {event.tick}")
     if event.type == EventType.HEALTH_CHANGE:
-        echo(f"Health changed! Now at: {event.health}")
+        echo(f";Health changed! Now at: {event.health}")
     if event.type == EventType.FOOD_CHANGE:
-        echo(f"Food level changed! Hunger: {event.hunger}, Saturation: {event.saturation}")
+        echo(f";Food level changed! Hunger: {event.hunger}, Saturation: {event.saturation}")
+    if event.type == EventType.ACTIONBAR_CHANGE:
+        echo(f";Actionbar changed to: {event.message}")
+    if event.type == EventType.CHAT:
+        if not event.message.startswith(";"):
+            echo(f";Message: {event.message}")
+            echo(f";Raw json: {event.json}")
 ```
