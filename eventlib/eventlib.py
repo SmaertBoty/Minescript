@@ -24,7 +24,7 @@ def __serve_listener__():
         try: 
             event = json.loads(line)
             if event["event"] == "intercept_incoming_chat":
-                incoming_intercept_queue.put(event["message"])
+                incoming_intercept_queue.put((event["text"],event["json"]))
             elif event["event"] == "entity_totem_popped":
                 totem_popped_queue.put(event["uuid"])
             elif event["event"] == "entity_died":
@@ -35,9 +35,11 @@ def __serve_listener__():
                 client_tick_queue.put(int(event["tick"]))
             elif event["event"] == "health_change":
                 health_change_queue.put(float(event["health"]))
-            elif event["food_change"]:
-                food_change_queue.put((float(event[""])))
-        except: log("Malformed json event:", f"'{line}'")
+            elif event["event"] == "food_change":
+                food_change_queue.put((float(event["food"]),float(event["saturation"])))
+            elif event["event"] == "actionbar_change":
+                actionbar_change_queue.put(event["message"])
+        except: log(f"Malformed json event: '{line}'")
 
 script = eps(
 r"""
@@ -51,15 +53,28 @@ BufferedWriter = JavaClass("java.io.BufferedWriter")
 OutputStreamWriter = JavaClass("java.io.OutputStreamWriter")
 Socket = JavaClass("java.net.Socket")
 StandardCharsets = JavaClass("java.nio.charset.StandardCharsets")
+mappings = JavaClass("net.minescript.common.Minescript").mappingsLoader.get()
+ComponentSerialization = JavaClass("net.minecraft.network.chat.ComponentSerialization")
+GsonBuilder = JavaClass("com.google.gson.GsonBuilder")
+JsonOps = JavaClass("com.mojang.serialization.JsonOps")
+RegistryOps = JavaClass("net.minecraft.resources.RegistryOps")
+
+def reflect_field(_class, field_name):
+    clss = _class.getClass()
+    f = mappings.getRuntimeFieldName(clss, field_name)
+    field = clss.getDeclaredField(f)
+    field.setAccessible(True)
+    return field.get(_class)
 
 identifier = '""" + identifier + r"""'
 if "eventlib" not in __script__.vars["game"]:
     __script__.vars["game"]["eventlib"] = {}
-__script__.vars["game"]["eventlib"][identifier] = {"intercept_incoming_chat":{"state":False,"startswith":""},"entity_totem_popped":False,"entity_died":False,"server_particle":False,"client_tick":False,"health_change":False,"food_change":False}
+__script__.vars["game"]["eventlib"][identifier] = {"intercept_incoming_chat":{"state":False,"startswith":""},"entity_totem_popped":False,"entity_died":False,"server_particle":False,"client_tick":False,"health_change":False,"food_change":False,"actionbar_change":False}
 bridge = Socket("127.0.0.1", """ + str(port) + r""")
 writer = BufferedWriter(OutputStreamWriter(bridge.getOutputStream(), StandardCharsets.UTF_8))
 hp = player_health()
 food = [mc.player.getFoodData().getFoodLevel(),mc.player.getFoodData().getSaturationLevel()]
+ab_timestamp_predicted = reflect_field(mc.gui,"overlayMessageTime")
 
 def add_event(event):
     writer.write(event + "\n")
@@ -68,27 +83,34 @@ def add_event(event):
 def s2c(event):
     if __script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["state"]:
         if isinstance(event.packet, ClientboundSystemChatPacket):
-            if event.packet.content().getString().startswith(__script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["startswith"]):
-                add_event('{"event":"intercept_incoming_chat","message":"' + event.packet.content().getString() + '"}')
-                event.cancel()
+            if event.packet.overlay(): return
+            comp = event.packet.content()
+            dat = event.packet.content().getString()
+            json_string = GsonBuilder().create().toJson(ComponentSerialization.CODEC.encodeStart(RegistryOps.create(JsonOps.INSTANCE, mc.level.registryAccess()),comp).getOrThrow())
         elif isinstance(event.packet, ClientboundPlayerChatPacket):
-            try: dat = event.packet.unsignedContent().getString()
-            except: dat = event.packet.body().content()
-            if dat.startswith(__script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["startswith"]):
-                add_event('{"event":"intercept_incoming_chat","message":"' + dat + '"}')
-                event.cancel()
+            dat = event.packet.body().content()
+            comp = event.packet.body()
+            json_string = '{"text":"' + dat + '"}'
+        else: return
+        if dat.startswith(__script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["startswith"]):
+            add_event('{"event":"intercept_incoming_chat","text":"' + dat + '","json":' + json_string + '}')
+            event.cancel()
 
     if isinstance(event.packet, ClientboundEntityEventPacket):
         if __script__.vars["game"]["eventlib"][identifier]["entity_totem_popped"]:
-            if int(event.packet.getEventId()) == 35: add_event('{"event":"entity_totem_popped","uuid":"' + event.packet.getEntity(mc.level).getStringUUID() + '"}')
+            if int(event.packet.getEventId()) == 35: 
+                add_event('{"event":"entity_totem_popped","uuid":"' + event.packet.getEntity(mc.level).getStringUUID() + '"}')
         if __script__.vars["game"]["eventlib"][identifier]["entity_died"]:
-            if int(event.packet.getEventId()) == 3: add_event('{"event":"entity_died","uuid":"' + event.packet.getEntity(mc.level).getStringUUID() + '"}')
+            if int(event.packet.getEventId()) == 3: 
+                add_event('{"event":"entity_died","uuid":"' + event.packet.getEntity(mc.level).getStringUUID() + '"}')
     
     if __script__.vars["game"]["eventlib"][identifier]["server_particle"]:
-        if isinstance(event.packet, ClientboundLevelParticlesPacket): add_event('{"event":"server_particle","particle":"' + BuiltInRegistries.PARTICLE_TYPE.getKey(event.packet.getParticle().getType()).toString() + '","x":str(event.packet.getX()),"y":str(event.packet.getY()),"z":str(event.packet.getZ())}')
+        if isinstance(event.packet, ClientboundLevelParticlesPacket): 
+            add_event('{"event":"server_particle","particle":"' + BuiltInRegistries.PARTICLE_TYPE.getKey(event.packet.getParticle().getType()).toString() + '","x":str(event.packet.getX()),"y":str(event.packet.getY()),"z":str(event.packet.getZ())}')
+
 
 def tick(event):
-    global hp, food
+    global hp, food, ab_timestamp_predicted
     if __script__.vars["game"]["eventlib"][identifier]["client_tick"]:
         add_event('{"event":"client_tick","tick":' + str(world_info().game_ticks) + '}')
     if __script__.vars["game"]["eventlib"][identifier]["health_change"]:
@@ -100,6 +122,13 @@ def tick(event):
         if food != new_food:
             add_event('{"event":"food_change","food":' + str(new_food[0]) + ',"saturation":' + str(new_food[1]) + '}')
             food = new_food
+    if __script__.vars["game"]["eventlib"][identifier]["actionbar_change"]:
+        try: nab = reflect_field(mc.gui,"overlayMessageString").getString()
+        except: nab = None
+        time = reflect_field(mc.gui,"overlayMessageTime")
+        if time != ab_timestamp_predicted-1 and time > 0:
+            add_event('{"event":"actionbar_change","message":"' + nab + '"}')
+        ab_timestamp_predicted = time
     
 add_event_listener("tick",tick)
 add_event_listener("clientbound_packet",s2c)
@@ -114,6 +143,7 @@ particle_queue = qQ()
 client_tick_queue = qQ()
 health_change_queue = qQ()
 food_change_queue = qQ()
+actionbar_change_queue = qQ()
 
 Thread(target=__serve_listener__).start()
 
@@ -121,6 +151,7 @@ Thread(target=__serve_listener__).start()
 class INCOMING_CHAT_INTERCEPT:
     type:str
     message:str
+    json:dict
 
 @dataclass
 class ENTITY_TOTEM_POPPED:
@@ -156,6 +187,11 @@ class FOOD_CHANGE:
     hunger:float
     saturation:float
 
+@dataclass
+class ACTIONBAR_CHANGE:
+    type:str
+    message:str
+
 m.EventType.INCOMING_CHAT_INTERCEPT = "incoming_chat_intercept"
 m._EVENT_CONSTRUCTORS["incoming_chat_intercept"] = INCOMING_CHAT_INTERCEPT
 
@@ -177,19 +213,25 @@ m._EVENT_CONSTRUCTORS["health_change"] = HEALTH_CHANGE
 m.EventType.FOOD_CHANGE = "food_change"
 m._EVENT_CONSTRUCTORS["food_change"] = FOOD_CHANGE
 
+m.EventType.ACTIONBAR_CHANGE = "actionbar_change"
+m._EVENT_CONSTRUCTORS["actionbar_change"] = ACTIONBAR_CHANGE
+
 def register_incoming_chat_interceptor(self,*,startswith:str=""):
     execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["intercept_incoming_chat"] = {"{"}"state":True,"startswith":"{startswith}"{"}"}'""")
+    self.eventlib_listeners.append("intercept_incoming_chat")
     def worker():
         while True:
             event = incoming_intercept_queue.get()
             self.queue.put({
                 "type": m.EventType.INCOMING_CHAT_INTERCEPT,
-                "message": event
+                "message": event[0],
+                "json": event[1]
             })
     Thread(target=worker, daemon=True).start()
 
 def register_totem_popped_listener(self):
     execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["entity_totem_popped"] = True'""")
+    self.eventlib_listeners.append("entity_totem_popped")
     def worker():
         while True:
             event = totem_popped_queue.get()
@@ -201,6 +243,7 @@ def register_totem_popped_listener(self):
 
 def register_entity_died_listener(self):
     execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["entity_died"] = True'""")
+    self.eventlib_listeners.append("entity_died")
     def worker():
         while True:
             event = entity_died_queue.get()
@@ -212,6 +255,7 @@ def register_entity_died_listener(self):
 
 def register_server_particle_listener(self):
     execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["server_particle"] = True'""")
+    self.eventlib_listeners.append("server_particle")
     def worker():
         while True:
             event = particle_queue.get()
@@ -226,6 +270,7 @@ def register_server_particle_listener(self):
 
 def register_client_tick_listener(self):
     execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["client_tick"] = True'""")
+    self.eventlib_listeners.append("client_tick")
     def worker():
         while True:
             event = client_tick_queue.get()
@@ -237,6 +282,7 @@ def register_client_tick_listener(self):
 
 def register_health_change_listener(self):
     execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["health_change"] = True'""")
+    self.eventlib_listeners.append("health_change")
     def worker():
         while True:
             event = health_change_queue.get()
@@ -248,15 +294,38 @@ def register_health_change_listener(self):
 
 def register_food_change_listener(self):
     execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["food_change"] = True'""")
+    self.eventlib_listeners.append("food_change")
     def worker():
         while True:
-            event = health_change_queue.get()
+            event = food_change_queue.get()
             self.queue.put({
                 "type": m.EventType.FOOD_CHANGE,
                 "hunger": event[0],
                 "saturation": event[1]
             })
     Thread(target=worker, daemon=True).start()
+
+def register_actionbar_change_listener(self):
+    execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["actionbar_change"] = True'""")
+    self.eventlib_listeners.append("actionbar_change")
+    def worker():
+        while True:
+            event = actionbar_change_queue.get()
+            self.queue.put({
+                "type": m.EventType.ACTIONBAR_CHANGE,
+                "message": event
+            })
+    Thread(target=worker, daemon=True).start()
+
+def unregister_all(self):
+    for event in self.eventlib_listeners:
+        if event != "intercept_incoming_chat": execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["{event}"] = False'""")
+        else: execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["{event}"]["state"] = False'""")
+    self.eventlib_listeners = []
+    listener_ids = self.event_listener_ids
+    self.event_listener_ids = []
+    for listener_id in listener_ids:
+      m._unregister_event_handler(listener_id)
 
 m.EventQueue.register_incoming_chat_interceptor = register_incoming_chat_interceptor
 m.EventQueue.register_totem_popped_listener = register_totem_popped_listener
@@ -265,9 +334,14 @@ m.EventQueue.register_server_particle_listener = register_server_particle_listen
 m.EventQueue.register_client_tick_listener = register_client_tick_listener
 m.EventQueue.register_health_change_listener = register_health_change_listener
 m.EventQueue.register_food_change_listener = register_food_change_listener
+m.EventQueue.register_actionbar_change_listener = register_actionbar_change_listener
+
+m.EventQueue.unregister_all = unregister_all
+m.EventQueue.eventlib_listeners = []
 
 if TYPE_CHECKING:
-    class EventQueue:
+    class EventQueue(m.EventQueue(),m.EventQueue):
+        eventlib_listeners = []
         def register_incoming_chat_interceptor(self,*,startswith:str=""): ...
         def register_totem_popped_listener(self): ...
         def register_entity_died_listener(self): ...
@@ -275,7 +349,8 @@ if TYPE_CHECKING:
         def register_client_tick_listener(self): ...
         def register_health_change_listener(self): ...
         def register_food_change_listener(self): ...
-        def get(self, block: bool = True, timeout: float = None) -> Event:
+        def register_actionbar_change_listener(self): ...
+        def get(self, block: bool = True, timeout: float = None) -> Event|None:
             """Gets the next event in the queue.
 
             Args:
@@ -289,6 +364,7 @@ if TYPE_CHECKING:
               `queue.Empty` if `block` is `True` and `timeout` expires, or `block` is `False` and
               queue is empty.
             """
+        def unregister_all(): ...
     class EventType(m._EventType):
         INCOMING_CHAT_INTERCEPT:str = "incoming_chat_intercept"
         ENTITY_TOTEM_POPPED:str = "entity_totem_popped"
@@ -297,6 +373,7 @@ if TYPE_CHECKING:
         CLIENT_TICK:str = "client_tick"
         HEALTH_CHANGE:str = "health_change"
         FOOD_CHANGE:str = "food_change"
+        ACTIONBAR_CHANGE:str = "actionbar_change"
     class Event:
         type:str
         time:float
@@ -318,3 +395,4 @@ if TYPE_CHECKING:
         x_max:int
         z_max:int
         connected:bool
+        json:dict
