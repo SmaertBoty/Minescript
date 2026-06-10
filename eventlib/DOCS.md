@@ -64,3 +64,16 @@ type: EventType.FOOD_CHANGE
 hunger: float
 saturation: float
 ```
+
+### Actionbar change
+Triggers when the actionbar changes
+```
+listener: register_actionbar_change_listener()
+type: EventType.ACTIONBAR_CHANGE
+message: str
+```
+
+# Modifications to builtin events
+### Chat event
+- Populate a `json` field with the chat messages raw json, if eventlib is enabled in the registering function, otherwise it uses the builtin protocol
+- `register_chat_listener(eventlib=True)`
