@@ -226,7 +226,7 @@ class EventlibKeyEvent(m.KeyEvent):
     type: str
     time: float
     key: int
-    pretty_key: str
+    pretty_key: str = None
     scan_code: int
     action: int
     modifiers: int
