@@ -1,5 +1,6 @@
 ## Table of contents
 ### Events
+- Modifications to builtin events
 - [Incoming chat interceptor](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#incoming-chat-interceptor)
 - [Entity totem popped](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#entity-totem-popped)
 - [Entity died](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#entity-died)
