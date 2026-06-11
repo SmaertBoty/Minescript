@@ -8,7 +8,7 @@ Easily and quickly manipulate the inventory.
 ### `pickup(slot,mouse=1)`
 - Simulate a pickup action on a slot
 
-### `quickmove(slot,mouse)`
+### `quickmove(slot,mouse=1)`
 - Simulate a quickmove action on a slot
 
 ### `swap(slot1,slot2)`
