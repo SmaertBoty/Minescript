@@ -31,6 +31,7 @@ events.register_food_change_listener()
 events.register_actionbar_change_listener()
 
 events.register_chat_listener(eventlib=True) # Enables the .json value on the event
+events.register_key_listener(eventlib=True) # Enables the .pretty_key value on the event
 
 while True:
     event = events.get()
@@ -55,4 +56,6 @@ while True:
         if not event.message.startswith(";"):
             echo(f";Message: {event.message}")
             echo(f";Raw json: {event.json}")
+    if event.type == EventType.KEY:
+        echo(f"Key code: {event.key} ({event.pretty_key})")
 ```
