@@ -1,4 +1,7 @@
 import system.lib.minescript as m
+import sys
+if int("".join([n for n in m.version_info().minescript if n.isdigit()])) < 5011: sys.exit("[Eventlib] Please update to 5.0b11!")
+
 from system.lib.minescript import *
 from threading import Thread
 from system.lib.java import eval_pyjinn_script as eps
@@ -42,6 +45,8 @@ def __serve_listener__():
                 actionbar_change_queue.put(event["message"])
             elif event["event"] == "chat_event":
                 chat_queue.put((event["text"],event["json"]))
+            elif event["event"] == "key_event":
+                key_queue.put((event["key"],event["pretty_key"],event["scan_code"],event["action"],event["modifiers"],event["screen"]))
         except: log(f"Malformed json event: '{line}'")
 
 script = eps(
@@ -61,6 +66,8 @@ ComponentSerialization = JavaClass("net.minecraft.network.chat.ComponentSerializ
 GsonBuilder = JavaClass("com.google.gson.GsonBuilder")
 JsonOps = JavaClass("com.mojang.serialization.JsonOps")
 RegistryOps = JavaClass("net.minecraft.resources.RegistryOps")
+InputConstants = JavaClass("com.mojang.blaze3d.platform.InputConstants")
+KeyEvent = JavaClass("net.minecraft.client.input.KeyEvent")
 
 def reflect_field(_class, field_name, raw=False):
     clss = _class.getClass()
@@ -117,6 +124,9 @@ def s2c(event):
         if isinstance(event.packet, ClientboundLevelParticlesPacket): 
             add_event('{"event":"server_particle","particle":"' + BuiltInRegistries.PARTICLE_TYPE.getKey(event.packet.getParticle().getType()).toString() + '","x":str(event.packet.getX()),"y":str(event.packet.getY()),"z":str(event.packet.getZ())}')
 
+def key_event(event):
+    pretty_key = InputConstants.getKey(KeyEvent(event.key,event.scan_code,event.modifiers)).getDisplayName().getString()
+    add_event('{"event":"key_event","key":' + str(event.key) + ',"pretty_key":"' + str(pretty_key) + '","scan_code":' + str(event.scan_code) + ',"action":' + str(event.action) + ',"modifiers":' + str(event.modifiers) + ',"screen":"' + str(event.screen) + '"}')
 
 def tick(event):
     global hp, food, ab_timestamp_predicted
@@ -141,6 +151,7 @@ def tick(event):
     
 add_event_listener("tick",tick)
 add_event_listener("clientbound_packet",s2c)
+add_event_listener("key",key_event)
 """)
 conn, _ = bridge.accept()
 file = conn.makefile()
@@ -154,6 +165,7 @@ health_change_queue = qQ()
 food_change_queue = qQ()
 actionbar_change_queue = qQ()
 chat_queue = qQ()
+key_queue = qQ()
 
 Thread(target=__serve_listener__).start()
 
@@ -208,6 +220,17 @@ class EventlibChatEvent(m.ChatEvent):
     time:float
     message:str
     json:dict=None
+
+@dataclass
+class EventlibKeyEvent(m.KeyEvent):
+    type: str
+    time: float
+    key: int
+    pretty_key: str
+    scan_code: int
+    action: int
+    modifiers: int
+    screen: str
 
 m.EventType.INCOMING_CHAT_INTERCEPT = "incoming_chat_intercept"
 m._EVENT_CONSTRUCTORS["incoming_chat_intercept"] = INCOMING_CHAT_INTERCEPT
@@ -350,6 +373,26 @@ def eventlib_register_chat_listener(self,*,eventlib=False):
         Thread(target=worker, daemon=True).start()
     else: self._register(m.EventType.CHAT, m._register_chat_message_listener)
 
+def eventlib_register_key_listener(self,*,eventlib=False):
+    if eventlib:
+        execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["key_listener"] = True'""")
+        self.eventlib_listeners.append("key_listener")
+        def worker():
+            while True:
+                event = key_queue.get()
+                self.queue.put({
+                    "type":m.EventType.KEY,
+                    "time": time(),
+                    "key": int(event[0]),
+                    "pretty_key": event[1],
+                    "scan_code": int(event[2]),
+                    "action": int(event[3]),
+                    "modifiers": int(event[4]),
+                    "screen": event[5]
+                })
+        Thread(target=worker, daemon=True).start()
+    else: self._register(m.EventType.KEY, m._register_key_listener)
+
 def unregister_all(self):
     for event in self.eventlib_listeners:
         if event != "intercept_incoming_chat": execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["{event}"] = False'""")
@@ -369,7 +412,9 @@ m.EventQueue.register_health_change_listener = register_health_change_listener
 m.EventQueue.register_food_change_listener = register_food_change_listener
 m.EventQueue.register_actionbar_change_listener = register_actionbar_change_listener
 m.EventQueue.register_chat_listener = eventlib_register_chat_listener
+m.EventQueue.register_key_listener = eventlib_register_key_listener
 m._EVENT_CONSTRUCTORS["chat"] = EventlibChatEvent
+m._EVENT_CONSTRUCTORS["key"] = EventlibKeyEvent
 
 m.EventQueue.unregister_all = unregister_all
 m.EventQueue.eventlib_listeners = []
@@ -414,6 +459,25 @@ if TYPE_CHECKING:
             ```
             If `eventlib` is `True`, extra data will be attached
             """
+        def register_key_listener(self,*,eventlib:bool=False):
+            """Registers listener for `EventType.KEY` events as `KeyEvent`.
+            Example:
+            ```
+              with EventQueue() as event_queue:
+                event_queue.register_key_listener()
+                while True:
+                  event = event_queue.get()
+                  if event.type == EventType.KEY:
+                    if event.action == 0:
+                      action = 'up'
+                    elif event.action == 1:
+                      action = 'down'
+                    else:
+                      action = 'repeat'
+                    echo(f"Got key {action} with code {event.key}")
+            ```
+            If `eventlib` is `True`, extra data will be attached
+            """
         def unregister_all(): ...
     class EventType(m._EventType):
         INCOMING_CHAT_INTERCEPT:str = "incoming_chat_intercept"
@@ -446,3 +510,5 @@ if TYPE_CHECKING:
         z_max:int
         connected:bool
         json:dict
+        key:int
+        pretty_key:str
