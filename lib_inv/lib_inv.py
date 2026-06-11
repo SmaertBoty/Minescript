@@ -119,7 +119,7 @@ def pickup(slot,mouse=1):
     """
     await_function_call("pickup",str(slot),str(mouse))
 
-def quickmove(slot,mouse):
+def quickmove(slot,mouse=1):
     """
     Simulate a quickmove action on a slot
     """
