@@ -19,3 +19,20 @@ Easily and quickly manipulate the inventory.
 
 ### `get_item(slot) -> dict`
 - Get an item from a slot
+
+
+## Example usage
+The following script will dump all diamonds from your inventory into the targeted chest
+```py
+import lib_inv as inv
+from system.lib.minescript import player_press_use, player_get_targeted_block
+import sys
+
+if "chest" not in player_get_targeted_block().type: sys.exit("Please look at a chest")
+player_press_use(True)
+player_press_use(False)
+
+for slot, item in enumerate(inv.inventory()):
+    if item["id"] == "minecraft:diamond":
+        inv.quickmove(slot)
+```
