@@ -62,12 +62,13 @@ GsonBuilder = JavaClass("com.google.gson.GsonBuilder")
 JsonOps = JavaClass("com.mojang.serialization.JsonOps")
 RegistryOps = JavaClass("net.minecraft.resources.RegistryOps")
 
-def reflect_field(_class, field_name):
+def reflect_field(_class, field_name, raw=False):
     clss = _class.getClass()
     f = mappings.getRuntimeFieldName(clss, field_name)
     field = clss.getDeclaredField(f)
     field.setAccessible(True)
-    return field.get(_class)
+    if not raw: return field.get(_class)
+    else: return field
 
 identifier = '""" + identifier + r"""'
 if "eventlib" not in __script__.vars["game"]:
@@ -99,7 +100,9 @@ def s2c(event):
             if dat.startswith(__script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["startswith"]):
                 add_event('{"event":"intercept_incoming_chat","text":"' + dat + '","json":' + json_string + '}')
                 event.cancel()
-        if __script__.vars["game"]["eventlib"][identifier]["chat_listener"]:
+                field = reflect_field(mc.player.connection,"nextChatIndex",True)
+                field.setInt(mc.player.connection, field.get(mc.player.connection)+1)
+        elif __script__.vars["game"]["eventlib"][identifier]["chat_listener"]:
             add_event('{"event":"chat_event","text":"' + dat + '","json":' + json_string + '}')
 
     if isinstance(event.packet, ClientboundEntityEventPacket):
@@ -199,12 +202,12 @@ class ACTIONBAR_CHANGE:
     type:str
     message:str
 
-class EventlibChatEvent:
-    def __init__(self,type,time,message,json=None):
-        self.type = type
-        self.time = time
-        self.message = message
-        self.json = json
+@dataclass
+class EventlibChatEvent(m.ChatEvent):
+    type:str
+    time:float
+    message:str
+    json:dict=None
 
 m.EventType.INCOMING_CHAT_INTERCEPT = "incoming_chat_intercept"
 m._EVENT_CONSTRUCTORS["incoming_chat_intercept"] = INCOMING_CHAT_INTERCEPT
