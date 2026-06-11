@@ -99,7 +99,7 @@ def s2c(event):
             if dat.startswith(__script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["startswith"]):
                 add_event('{"event":"intercept_incoming_chat","text":"' + dat + '","json":' + json_string + '}')
                 event.cancel()
-        elif __script__.vars["game"]["eventlib"][identifier]["chat_listener"]:
+        if __script__.vars["game"]["eventlib"][identifier]["chat_listener"]:
             add_event('{"event":"chat_event","text":"' + dat + '","json":' + json_string + '}')
 
     if isinstance(event.packet, ClientboundEntityEventPacket):
