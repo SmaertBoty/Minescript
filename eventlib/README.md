@@ -57,5 +57,5 @@ while True:
             echo(f";Message: {event.message}")
             echo(f";Raw json: {event.json}")
     if event.type == EventType.KEY:
-        echo(f"Key code: {event.key} ({event.pretty_key})")
+        echo(f";Key code: {event.key} ({event.pretty_key})")
 ```
