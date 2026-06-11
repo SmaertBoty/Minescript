@@ -79,3 +79,8 @@ message: str
 - Populate a `json` field with the chat messages raw json, if eventlib is enabled in the registering function, otherwise it uses the builtin protocol
 - `register_chat_listener(eventlib=True)`
 - Optional, `False` by default
+
+### Key event
+- Populate a `pretty_key` field with the pretty name of the GLFW key in CamelCase (ie.: `A`, `B`, `Left Control` etc...), if eventlib is enabled in the registering function, otherwise it uses the builtin protocol
+- `register_key_listener(eventlib=True)`
+- Optional, `False` by default
