@@ -151,7 +151,7 @@ food = [mc.player.getFoodData().getFoodLevel(),mc.player.getFoodData().getSatura
 ab_timestamp_predicted = reflect_field(mc.gui,"overlayMessageTime")
 
 def add_event(event):
-    writer.write(event + "\n")
+    writer.write(event.replace("\n",r"\n")  + "\n")
     writer.flush()
 
 def s2c(event):
