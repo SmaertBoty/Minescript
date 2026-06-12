@@ -23,9 +23,9 @@ port = bridge.getsockname()[1]
 
 def __serve_listener__():
     while True:
+        line = file.readline()
+        if not line: continue
         try: 
-            line = file.readline()
-            if not line: continue
             event = json.loads(line)
             if event["event"] == "intercept_incoming_chat":
                 queues = registered_incoming_intercept.copy()
