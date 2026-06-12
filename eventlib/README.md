@@ -10,6 +10,9 @@ As of now, it contains:
 - `HEALTH_CHANGE`
 - `FOOD_CHANGE`
 - `ACTIONBAR_CHANGE`
+And also updated:
+- `ChatEvent` -> Optionally populate `.json`
+- `KeyEvent` -> Optionally populate `.pretty_name`
 
 And i would like to ask you (🫵) for events you would like to see
 
