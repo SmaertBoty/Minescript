@@ -218,7 +218,7 @@ add_event_listener("clientbound_packet",s2c)
 add_event_listener("key",key_event)
 """)
 conn, _ = bridge.accept()
-file = conn.makefile()
+file = conn.makefile(encoding="utf-8")
 
 registered_incoming_intercept = []
 registered_totem_popped = []
