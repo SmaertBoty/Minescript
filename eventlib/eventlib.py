@@ -13,7 +13,8 @@ from typing import TYPE_CHECKING
 from dataclasses import dataclass
 from time import time
 
-identifier = str(uuid.uuid8())
+try: identifier = str(uuid.uuid8())
+except: identifier = str(uuid.uuid1())
 
 bridge = socket.socket()
 bridge.bind(("127.0.0.1", 0))
@@ -22,31 +23,93 @@ port = bridge.getsockname()[1]
 
 def __serve_listener__():
     while True:
-        line = file.readline()
-        if not line:
-            continue
         try: 
+            line = file.readline()
+            if not line: continue
             event = json.loads(line)
             if event["event"] == "intercept_incoming_chat":
-                incoming_intercept_queue.put((event["text"],event["json"]))
+                queues = registered_incoming_intercept.copy()
+                for queue in queues:
+                    queue.put(
+                        {
+                        "type": m.EventType.INCOMING_CHAT_INTERCEPT,
+                        "message": event["text"],
+                        "json": event["json"]
+                    })
             elif event["event"] == "entity_totem_popped":
-                totem_popped_queue.put(event["uuid"])
+                queues = registered_totem_popped.copy()
+                for queue in queues:
+                    queue.put({
+                        "type": m.EventType.ENTITY_TOTEM_POPPED,
+                        "entity": [e for e in entities() if e.uuid == event["uuid"]][0]
+                    })
             elif event["event"] == "entity_died":
-                entity_died_queue.put(event["uuid"])
+                queues = registered_entity_died.copy()
+                for queue in queues:
+                    queue.put({
+                        "type": m.EventType.ENTITY_DIED,
+                        "entity": [e for e in entities() if e.uuid == event["uuid"]][0]
+                    })
             elif event["event"] == "server_particle":
-                particle_queue.put((event["particle"],float(event["x"]),float(event["y"]),float(event["z"])))
+                queues = registered_particle.copy()
+                for queue in queues:
+                    queue.put({
+                        "type": m.EventType.SERVER_PARTICLE,
+                        "particle": event["particle"],
+                        "position": (float(event["x"]),float(event["y"]),float(event["z"]))
+                    })
             elif event["event"] == "client_tick":
-                client_tick_queue.put(int(event["tick"]))
+                queues = registered_client_tick.copy()
+                for queue in queues:
+                    queue.put({
+                        "type": m.EventType.CLIENT_TICK,
+                        "tick": int(event["tick"])
+                    })
             elif event["event"] == "health_change":
-                health_change_queue.put(float(event["health"]))
+                queues = registered_client_tick.copy()
+                for queue in queues:
+                    queue.put({
+                        "type": m.EventType.HEALTH_CHANGE,
+                        "health": float(event["health"])
+                    })
             elif event["event"] == "food_change":
-                food_change_queue.put((float(event["food"]),float(event["saturation"])))
+                queues = registered_food_change.copy()
+                for queue in queues:
+                    queue.put({
+                        "type": m.EventType.FOOD_CHANGE,
+                        "hunger": float(event["food"]),
+                        "saturation": float(event["saturation"])
+                    })
             elif event["event"] == "actionbar_change":
-                actionbar_change_queue.put(event["message"])
+                queues = registered_actionbar_change.copy()
+                for queue in queues:
+                    queue.put({
+                        "type": m.EventType.ACTIONBAR_CHANGE,
+                        "message": event["message"]
+                    })
             elif event["event"] == "chat_event":
-                chat_queue.put((event["text"],event["json"]))
+                queues = registered_chat.copy()
+                for queue in queues:
+                    queue.put({
+                        "type": m.EventType.CHAT,
+                        "message": event["text"],
+                        "json": event["json"],
+                        "time": time()
+                    })
             elif event["event"] == "key_event":
-                key_queue.put((event["key"],event["pretty_key"],event["scan_code"],event["action"],event["modifiers"],event["screen"]))
+                queues = registered_key.copy()
+                for queue in queues:
+                    queue.put({
+                        "type":m.EventType.KEY,
+                        "time": time(),
+                        "key": int(event["key"]),
+                        "pretty_key": event["pretty_key"],
+                        "scan_code": int(event["scan_code"]),
+                        "action": int(event["action"]),
+                        "modifiers": int(event["modifiers"]),
+                        "screen": event["screen"]
+                    })
+            queues = []
         except: log(f"Malformed json event: '{line}'")
 
 script = eps(
@@ -156,18 +219,18 @@ add_event_listener("key",key_event)
 conn, _ = bridge.accept()
 file = conn.makefile()
 
-incoming_intercept_queue = qQ()
-totem_popped_queue = qQ()
-entity_died_queue = qQ()
-particle_queue = qQ()
-client_tick_queue = qQ()
-health_change_queue = qQ()
-food_change_queue = qQ()
-actionbar_change_queue = qQ()
-chat_queue = qQ()
-key_queue = qQ()
+registered_incoming_intercept = []
+registered_totem_popped = []
+registered_entity_died = []
+registered_particle = []
+registered_client_tick = []
+registered_health_change = []
+registered_food_change = []
+registered_actionbar_change = []
+registered_chat = []
+registered_key = []
 
-Thread(target=__serve_listener__).start()
+Thread(target=__serve_listener__,daemon=True).start()
 
 @dataclass
 class INCOMING_CHAT_INTERCEPT:
@@ -189,9 +252,7 @@ class ENTITY_DIED:
 class SERVER_PARTICLE:
     type:str
     particle:str
-    x:float
-    y:float
-    z:float
+    position:tuple[float,float,float]
 
 @dataclass
 class CLIENT_TICK:
@@ -259,138 +320,55 @@ m._EVENT_CONSTRUCTORS["actionbar_change"] = ACTIONBAR_CHANGE
 def register_incoming_chat_interceptor(self,*,startswith:str=""):
     execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["intercept_incoming_chat"] = {"{"}"state":True,"startswith":"{startswith}"{"}"}'""")
     self.eventlib_listeners.append("intercept_incoming_chat")
-    def worker():
-        while True:
-            event = incoming_intercept_queue.get()
-            self.queue.put({
-                "type": m.EventType.INCOMING_CHAT_INTERCEPT,
-                "message": event[0],
-                "json": event[1]
-            })
-    Thread(target=worker, daemon=True).start()
+    registered_incoming_intercept.append(self.queue)
 
 def register_totem_popped_listener(self):
     execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["entity_totem_popped"] = True'""")
     self.eventlib_listeners.append("entity_totem_popped")
-    def worker():
-        while True:
-            event = totem_popped_queue.get()
-            self.queue.put({
-                "type": m.EventType.ENTITY_TOTEM_POPPED,
-                "entity": [e for e in entities() if e.uuid == event][0]
-            })
-    Thread(target=worker, daemon=True).start()
+    registered_totem_popped.append(self.queue)
 
 def register_entity_died_listener(self):
     execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["entity_died"] = True'""")
     self.eventlib_listeners.append("entity_died")
-    def worker():
-        while True:
-            event = entity_died_queue.get()
-            self.queue.put({
-                "type": m.EventType.ENTITY_DIED,
-                "entity": [e for e in entities() if e.uuid == event][0]
-            })
-    Thread(target=worker, daemon=True).start()
+    registered_entity_died.append(self.queue)
 
 def register_server_particle_listener(self):
     execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["server_particle"] = True'""")
     self.eventlib_listeners.append("server_particle")
-    def worker():
-        while True:
-            event = particle_queue.get()
-            self.queue.put({
-                "type": m.EventType.SERVER_PARTICLE,
-                "particle": event[0],
-                "x": event[1],
-                "y": event[2],
-                "z": event[3]
-            })
-    Thread(target=worker, daemon=True).start()
+    registered_particle.append(self.queue)
 
 def register_client_tick_listener(self):
     execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["client_tick"] = True'""")
     self.eventlib_listeners.append("client_tick")
-    def worker():
-        while True:
-            event = client_tick_queue.get()
-            self.queue.put({
-                "type": m.EventType.CLIENT_TICK,
-                "tick": event
-            })
-    Thread(target=worker, daemon=True).start()
+    registered_client_tick.append(self.queue)
 
 def register_health_change_listener(self):
     execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["health_change"] = True'""")
     self.eventlib_listeners.append("health_change")
-    def worker():
-        while True:
-            event = health_change_queue.get()
-            self.queue.put({
-                "type": m.EventType.HEALTH_CHANGE,
-                "health": event
-            })
-    Thread(target=worker, daemon=True).start()
+    registered_health_change.append(self.queue)
 
 def register_food_change_listener(self):
     execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["food_change"] = True'""")
     self.eventlib_listeners.append("food_change")
-    def worker():
-        while True:
-            event = food_change_queue.get()
-            self.queue.put({
-                "type": m.EventType.FOOD_CHANGE,
-                "hunger": event[0],
-                "saturation": event[1]
-            })
-    Thread(target=worker, daemon=True).start()
+    registered_food_change.append(self.queue)
 
 def register_actionbar_change_listener(self):
     execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["actionbar_change"] = True'""")
     self.eventlib_listeners.append("actionbar_change")
-    def worker():
-        while True:
-            event = actionbar_change_queue.get()
-            self.queue.put({
-                "type": m.EventType.ACTIONBAR_CHANGE,
-                "message": event
-            })
-    Thread(target=worker, daemon=True).start()
+    registered_actionbar_change.append(self.queue)
 
 def eventlib_register_chat_listener(self,*,eventlib=False):
     if eventlib: 
         execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["chat_listener"] = True'""")
         self.eventlib_listeners.append("chat_listener")
-        def worker():
-            while True:
-                event = chat_queue.get()
-                self.queue.put({
-                    "type": m.EventType.CHAT,
-                    "message": event[0],
-                    "json": event[1],
-                    "time": time()
-                })
-        Thread(target=worker, daemon=True).start()
+        registered_chat.append(self.queue)
     else: self._register(m.EventType.CHAT, m._register_chat_message_listener)
 
 def eventlib_register_key_listener(self,*,eventlib=False):
     if eventlib:
         execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["key_listener"] = True'""")
         self.eventlib_listeners.append("key_listener")
-        def worker():
-            while True:
-                event = key_queue.get()
-                self.queue.put({
-                    "type":m.EventType.KEY,
-                    "time": time(),
-                    "key": int(event[0]),
-                    "pretty_key": event[1],
-                    "scan_code": int(event[2]),
-                    "action": int(event[3]),
-                    "modifiers": int(event[4]),
-                    "screen": event[5]
-                })
-        Thread(target=worker, daemon=True).start()
+        registered_key.append(self.queue)
     else: self._register(m.EventType.KEY, m._register_key_listener)
 
 def unregister_all(self):
