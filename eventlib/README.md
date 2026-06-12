@@ -13,7 +13,7 @@ As of now, it contains:
 
 And also updated:
 - `ChatEvent` -> Optionally populate `.json`
-- `KeyEvent` -> Optionally populate `.pretty_name`
+- `KeyEvent` -> Optionally populate `.pretty_key`
 
 And i would like to ask you (🫵) for events you would like to see
 
