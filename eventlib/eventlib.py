@@ -188,8 +188,9 @@ def s2c(event):
             add_event('{"event":"server_particle","particle":"' + BuiltInRegistries.PARTICLE_TYPE.getKey(event.packet.getParticle().getType()).toString() + '","x":str(event.packet.getX()),"y":str(event.packet.getY()),"z":str(event.packet.getZ())}')
 
 def key_event(event):
-    pretty_key = InputConstants.getKey(KeyEvent(event.key,event.scan_code,event.modifiers)).getDisplayName().getString()
-    add_event('{"event":"key_event","key":' + str(event.key) + ',"pretty_key":"' + str(pretty_key) + '","scan_code":' + str(event.scan_code) + ',"action":' + str(event.action) + ',"modifiers":' + str(event.modifiers) + ',"screen":"' + str(event.screen) + '"}')
+    if __script__.vars["game"]["eventlib"][identifier]["key_listener"]:
+        pretty_key = InputConstants.getKey(KeyEvent(event.key,event.scan_code,event.modifiers)).getDisplayName().getString()
+        add_event('{"event":"key_event","key":' + str(event.key) + ',"pretty_key":"' + str(pretty_key) + '","scan_code":' + str(event.scan_code) + ',"action":' + str(event.action) + ',"modifiers":' + str(event.modifiers) + ',"screen":"' + str(event.screen) + '"}')
 
 def tick(event):
     global hp, food, ab_timestamp_predicted
