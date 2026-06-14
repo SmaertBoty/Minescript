@@ -2,6 +2,17 @@ import system.lib.minescript as m
 import sys
 if int("".join([n for n in m.version_info().minescript if n.isdigit()])) < 5011: sys.exit("[Eventlib] Please update to 5.0b11!")
 
+version = int("".join([n for n in m.version_info().minecraft if n.isdigit()]))
+
+version_mappings = {
+    "keyevent_const": {
+        (0,12108) : "event.key,event.scan_code",
+        (12109,12111): "KeyEvent(event.key,event.scan_code,event.modifiers)"
+    }
+}
+
+keyevent_mapping = [v for k,v in version_mappings["keyevent_const"].items() if k[0] <= version <= k[1]][0]
+
 from system.lib.minescript import *
 from threading import Thread
 from system.lib.java import eval_pyjinn_script as eps
@@ -30,8 +41,7 @@ def __serve_listener__():
             if event["event"] == "intercept_incoming_chat":
                 queues = registered_incoming_intercept.copy()
                 for queue in queues:
-                    queue.put(
-                        {
+                    queue.put({
                         "type": m.EventType.INCOMING_CHAT_INTERCEPT,
                         "message": event["text"],
                         "json": event["json"]
@@ -151,7 +161,7 @@ food = [mc.player.getFoodData().getFoodLevel(),mc.player.getFoodData().getSatura
 ab_timestamp_predicted = reflect_field(mc.gui,"overlayMessageTime")
 
 def add_event(event):
-    writer.write(event.replace("\n",r"\n")  + "\n")
+    writer.write(event.replace("\n",r"\n") + "\n")
     writer.flush()
 
 def s2c(event):
@@ -189,7 +199,7 @@ def s2c(event):
 
 def key_event(event):
     if __script__.vars["game"]["eventlib"][identifier]["key_listener"]:
-        pretty_key = InputConstants.getKey(KeyEvent(event.key,event.scan_code,event.modifiers)).getDisplayName().getString()
+        pretty_key = InputConstants.getKey(""" + keyevent_mapping + r""").getDisplayName().getString() # KeyEvent(event.key,event.scan_code,event.modifiers)
         add_event('{"event":"key_event","key":' + str(event.key) + ',"pretty_key":"' + str(pretty_key) + '","scan_code":' + str(event.scan_code) + ',"action":' + str(event.action) + ',"modifiers":' + str(event.modifiers) + ',"screen":"' + str(event.screen) + '"}')
 
 def tick(event):
