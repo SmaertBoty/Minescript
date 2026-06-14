@@ -6,8 +6,8 @@ version = int("".join([n for n in m.version_info().minecraft if n.isdigit()]))
 
 version_mappings = {
     "keyevent_const": {
-        (0,12108) : "event.key,event.scan_code",
-        (12109,12111): "KeyEvent(event.key,event.scan_code,event.modifiers)"
+        (0,12108) : ("event.key,event.scan_code",""),
+        (12109,12111): ("KeyEvent(event.key,event.scan_code,event.modifiers)","""KeyEvent = JavaClass("net.minecraft.client.input.KeyEvent")""")
     }
 }
 
@@ -140,7 +140,7 @@ GsonBuilder = JavaClass("com.google.gson.GsonBuilder")
 JsonOps = JavaClass("com.mojang.serialization.JsonOps")
 RegistryOps = JavaClass("net.minecraft.resources.RegistryOps")
 InputConstants = JavaClass("com.mojang.blaze3d.platform.InputConstants")
-KeyEvent = JavaClass("net.minecraft.client.input.KeyEvent")
+""" + keyevent_mapping[1] + r"""
 
 def reflect_field(_class, field_name, raw=False):
     clss = _class.getClass()
@@ -199,7 +199,7 @@ def s2c(event):
 
 def key_event(event):
     if __script__.vars["game"]["eventlib"][identifier]["key_listener"]:
-        pretty_key = InputConstants.getKey(""" + keyevent_mapping + r""").getDisplayName().getString() # KeyEvent(event.key,event.scan_code,event.modifiers)
+        pretty_key = InputConstants.getKey(""" + keyevent_mapping[0] + r""").getDisplayName().getString()
         add_event('{"event":"key_event","key":' + str(event.key) + ',"pretty_key":"' + str(pretty_key) + '","scan_code":' + str(event.scan_code) + ',"action":' + str(event.action) + ',"modifiers":' + str(event.modifiers) + ',"screen":"' + str(event.screen) + '"}')
 
 def tick(event):
