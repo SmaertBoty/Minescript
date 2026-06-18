@@ -10,6 +10,7 @@ As of now, it contains:
 - `HEALTH_CHANGE`
 - `FOOD_CHANGE`
 - `ACTIONBAR_CHANGE`
+- `COMMAND_INTERCEPT`
 
 And also updated:
 - `ChatEvent` -> Optionally populate `.json`
@@ -33,6 +34,7 @@ events.register_client_tick_listener()
 events.register_health_change_listener()
 events.register_food_change_listener()
 events.register_actionbar_change_listener()
+events.register_command_interceptor()
 
 events.register_chat_listener(eventlib=True) # Enables the .json value on the event
 events.register_key_listener(eventlib=True) # Enables the .pretty_key value on the event
@@ -62,4 +64,7 @@ while True:
             echo(f";Raw json: {event.json}")
     if event.type == EventType.KEY:
         echo(f";Key code: {event.key} ({event.pretty_key})")
+    if event.type == EventType.COMMAND_INTERCEPT:
+        echo(f";Command: {event.command}")
+        event.execute()
 ```
