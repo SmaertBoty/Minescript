@@ -8,7 +8,7 @@
 - [Health change](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#health-change)
 - [Food change](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#food-change)
 - [Actionbar change](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#actionbar-change)
-- [Command interceptor]()
+- [Command interceptor](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#command-interceptor)
 ### Data Types
 - EntityData -> https://minescript.net/docs#entitydata
 
