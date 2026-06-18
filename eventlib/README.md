@@ -20,6 +20,9 @@ And i would like to ask you (🫵) for events you would like to see
 
 Docs: https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md
 
+Feedback appreciated!
+-# [Eventlib on Discord](https://discord.com/channels/930220988472389713/1511099314468950218)
+
 Example usage:
 ```py
 from system.lib.minescript import EventType, EventQueue, echo, execute
