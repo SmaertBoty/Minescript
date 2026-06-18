@@ -119,6 +119,14 @@ def __serve_listener__():
                         "modifiers": int(event["modifiers"]),
                         "screen": event["screen"]
                     })
+            elif event["event"] == "command_intercept":
+                queues = registered_command_intercept.copy()
+                for queue in queues:
+                    queue.put({
+                        "type": m.EventType.COMMAND_INTERCEPT,
+                        "command": event["command"],
+                        "execute": lambda: m.execute(fr"""\eval '__script__.vars["game"]["eventlib"]["{identifier}"]["command_intercept"]["block"] = False' 'execute("{event["command"]}")'""")
+                    })
             queues = []
         except: log(f"Malformed json event: '{line}'")
 
@@ -141,6 +149,8 @@ JsonOps = JavaClass("com.mojang.serialization.JsonOps")
 RegistryOps = JavaClass("net.minecraft.resources.RegistryOps")
 InputConstants = JavaClass("com.mojang.blaze3d.platform.InputConstants")
 """ + keyevent_mapping[1] + r"""
+ServerboundChatCommandPacket = JavaClass("net.minecraft.network.protocol.game.ServerboundChatCommandPacket")
+ServerboundChatCommandSignedPacket = JavaClass("net.minecraft.network.protocol.game.ServerboundChatCommandSignedPacket")
 
 def reflect_field(_class, field_name, raw=False):
     clss = _class.getClass()
@@ -153,7 +163,7 @@ def reflect_field(_class, field_name, raw=False):
 identifier = '""" + identifier + r"""'
 if "eventlib" not in __script__.vars["game"]:
     __script__.vars["game"]["eventlib"] = {}
-__script__.vars["game"]["eventlib"][identifier] = {"intercept_incoming_chat":{"state":False,"startswith":""},"entity_totem_popped":False,"entity_died":False,"server_particle":False,"client_tick":False,"health_change":False,"food_change":False,"actionbar_change":False,"chat_listener":False,"key_listener":False}
+__script__.vars["game"]["eventlib"][identifier] = {"intercept_incoming_chat":{"state":False,"startswith":""},"entity_totem_popped":False,"entity_died":False,"server_particle":False,"client_tick":False,"health_change":False,"food_change":False,"actionbar_change":False,"chat_listener":False,"key_listener":False,"command_intercept":{"block":True,"state":False}}
 bridge = Socket("127.0.0.1", """ + str(port) + r""")
 writer = BufferedWriter(OutputStreamWriter(bridge.getOutputStream(), StandardCharsets.UTF_8))
 hp = player_health()
@@ -197,6 +207,14 @@ def s2c(event):
         if isinstance(event.packet, ClientboundLevelParticlesPacket): 
             add_event('{"event":"server_particle","particle":"' + BuiltInRegistries.PARTICLE_TYPE.getKey(event.packet.getParticle().getType()).toString() + '","x":str(event.packet.getX()),"y":str(event.packet.getY()),"z":str(event.packet.getZ())}')
 
+def c2s(event):
+    if __script__.vars["game"]["eventlib"][identifier]["command_intercept"]["state"]:
+        if isinstance(event.packet, ServerboundChatCommandPacket) or isinstance(event.packet, ServerboundChatCommandSignedPacket):
+            if __script__.vars["game"]["eventlib"][identifier]["command_intercept"]["block"]:
+                add_event('{"event":"command_intercept","command":"' + event.packet.command() + '"}')
+                event.cancel()
+            else: __script__.vars["game"]["eventlib"][identifier]["command_intercept"]["block"] = True
+
 def key_event(event):
     if __script__.vars["game"]["eventlib"][identifier]["key_listener"]:
         pretty_key = InputConstants.getKey(""" + keyevent_mapping[0] + r""").getDisplayName().getString()
@@ -222,10 +240,11 @@ def tick(event):
         if time != ab_timestamp_predicted-1 and time > 0:
             add_event('{"event":"actionbar_change","message":"' + nab + '"}')
         ab_timestamp_predicted = time
-    
+
 add_event_listener("tick",tick)
 add_event_listener("clientbound_packet",s2c)
 add_event_listener("key",key_event)
+add_event_listener("serverbound_packet",c2s)
 """)
 conn, _ = bridge.accept()
 file = conn.makefile(encoding="utf-8")
@@ -240,6 +259,7 @@ registered_food_change = []
 registered_actionbar_change = []
 registered_chat = []
 registered_key = []
+registered_command_intercept = []
 
 Thread(target=__serve_listener__,daemon=True).start()
 
@@ -304,6 +324,12 @@ class EventlibKeyEvent(m.KeyEvent):
     modifiers: int
     screen: str
 
+@dataclass
+class COMMAND_INTERCEPT:
+    type:str
+    command:str
+    execute:Callable
+
 m.EventType.INCOMING_CHAT_INTERCEPT = "incoming_chat_intercept"
 m._EVENT_CONSTRUCTORS["incoming_chat_intercept"] = INCOMING_CHAT_INTERCEPT
 
@@ -327,6 +353,9 @@ m._EVENT_CONSTRUCTORS["food_change"] = FOOD_CHANGE
 
 m.EventType.ACTIONBAR_CHANGE = "actionbar_change"
 m._EVENT_CONSTRUCTORS["actionbar_change"] = ACTIONBAR_CHANGE
+
+m.EventType.COMMAND_INTERCEPT = "command_intercept"
+m._EVENT_CONSTRUCTORS["command_intercept"] = COMMAND_INTERCEPT
 
 def register_incoming_chat_interceptor(self,*,startswith:str=""):
     execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["intercept_incoming_chat"] = {"{"}"state":True,"startswith":"{startswith}"{"}"}'""")
@@ -382,10 +411,16 @@ def eventlib_register_key_listener(self,*,eventlib=False):
         registered_key.append(self.queue)
     else: self._register(m.EventType.KEY, m._register_key_listener)
 
+def register_command_interceptor(self):
+    execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["command_intercept"]["state"] = True'""")
+    self.eventlib_listeners.append("command_intercept")
+    registered_command_intercept.append(self.queue)
+
 def unregister_all(self):
     for event in self.eventlib_listeners:
         if event != "intercept_incoming_chat": execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["{event}"] = False'""")
-        else: execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["{event}"]["state"] = False'""")
+        elif event == "intercept_incoming_chat": execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["intercept_incoming_chat"]["state"] = False'""")
+        elif event == "command_intercept": execute(fr"""\eval '0' '__script__.vars["game"]["eventlib"]["{identifier}"]["command_intercept"]["state"] = False'""")
     self.eventlib_listeners = []
     listener_ids = self.event_listener_ids
     self.event_listener_ids = []
@@ -402,6 +437,7 @@ m.EventQueue.register_food_change_listener = register_food_change_listener
 m.EventQueue.register_actionbar_change_listener = register_actionbar_change_listener
 m.EventQueue.register_chat_listener = eventlib_register_chat_listener
 m.EventQueue.register_key_listener = eventlib_register_key_listener
+m.EventQueue.register_command_interceptor = register_command_interceptor
 m._EVENT_CONSTRUCTORS["chat"] = EventlibChatEvent
 m._EVENT_CONSTRUCTORS["key"] = EventlibKeyEvent
 
@@ -467,6 +503,7 @@ if TYPE_CHECKING:
             ```
             If `eventlib` is `True`, extra data will be attached
             """
+        def register_command_interceptor(self): ...
         def unregister_all(): ...
     class EventType(m._EventType):
         INCOMING_CHAT_INTERCEPT:str = "incoming_chat_intercept"
@@ -477,6 +514,7 @@ if TYPE_CHECKING:
         HEALTH_CHANGE:str = "health_change"
         FOOD_CHANGE:str = "food_change"
         ACTIONBAR_CHANGE:str = "actionbar_change"
+        COMMAND_INTERCEPT:str = "command_intercept"
     class Event:
         type:str
         time:float
@@ -501,3 +539,8 @@ if TYPE_CHECKING:
         json:dict
         key:int
         pretty_key:str
+        execute:Callable
+        """
+        Executes the command, without intercepting it
+        """
+        command:str
