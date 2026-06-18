@@ -79,7 +79,8 @@ message: str
 Intercepts all outgoing commands:
 - `/` commands executed manually, or via `execute()`
 - any and all commands from `click_event` (in a json formatted chat message)
-You can execute the intercepted command with `.execute`, wich will not trigger the interceptor
+
+You can execute the intercepted command with `.execute()`, wich will not trigger the interceptor
 ```py
 listener: register_command_interceptor()
 type: EventType.COMMAND_INTERCEPT
