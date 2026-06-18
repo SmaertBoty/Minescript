@@ -22,7 +22,7 @@ Docs: https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md
 
 Example usage:
 ```py
-from system.lib.minescript import EventType, EventQueue, echo
+from system.lib.minescript import EventType, EventQueue, echo, execute
 from eventlib import * # Put it anywhere before instancing event queue ("EventQueue()")
 
 events = EventQueue()
@@ -67,4 +67,6 @@ while True:
     if event.type == EventType.COMMAND_INTERCEPT:
         echo(f";Command: {event.command}")
         event.execute()
+        with Ignore_Command_Intercept:
+            execute("/say This was not intercepted!")
 ```
