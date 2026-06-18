@@ -8,6 +8,7 @@
 - [Health change](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#health-change)
 - [Food change](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#food-change)
 - [Actionbar change](https://github.com/SmaertBoty/Minescript/blob/main/eventlib/DOCS.md#actionbar-change)
+- [Command interceptor]()
 ### Data Types
 - EntityData -> https://minescript.net/docs#entitydata
 
@@ -80,7 +81,7 @@ Intercepts all outgoing commands:
 - `/` commands executed manually, or via `execute()`
 - any and all commands from `click_event` (in a json formatted chat message)
 
-You can execute the intercepted command with `.execute()`, wich will not trigger the interceptor
+To execute commands without triggering the interceptor, use `.execute()` on the event, or `execute()` in a `Ignore_Command_Intercept` context manager
 ```py
 listener: register_command_interceptor()
 type: EventType.COMMAND_INTERCEPT
