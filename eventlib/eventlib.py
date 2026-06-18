@@ -330,6 +330,35 @@ class COMMAND_INTERCEPT:
     command:str
     execute:Callable
 
+def _execute(command: str):
+    current_executor(command)
+
+execute = _execute
+m.execute = _execute
+
+def __original_execute__(command: str):
+    if not isinstance(command, str):
+      raise TypeError("Argument must be a string.")
+    return (command,)
+__original_execute__ = m.NoReturnScriptFunction("execute", __original_execute__)
+
+def eventlib_execute(command:str):
+    if not isinstance(command, str): raise TypeError("Argument must be a string.")
+    __original_execute__(fr"""\eval '__script__.vars["game"]["eventlib"]["{identifier}"]["command_intercept"]["block"] = False' 'execute("{command}")'""")
+
+current_executor = __original_execute__
+
+class ICI:
+    def __enter__(*_):
+        global current_executor
+        current_executor = eventlib_execute
+    
+    def __exit__(*_):
+        global current_executor
+        current_executor = __original_execute__
+
+Ignore_Command_Intercept = ICI()
+
 m.EventType.INCOMING_CHAT_INTERCEPT = "incoming_chat_intercept"
 m._EVENT_CONSTRUCTORS["incoming_chat_intercept"] = INCOMING_CHAT_INTERCEPT
 
@@ -505,6 +534,19 @@ if TYPE_CHECKING:
             """
         def register_command_interceptor(self): ...
         def unregister_all(): ...
+    def execute(command: str):
+          """Executes the given command.
+        
+          If `command` is prefixed by a backslash, it's treated as Minescript command,
+          otherwise it's treated as a Minecraft command (the slash prefix is optional).
+        
+          *Note: This was named `exec` in Minescript 2.0. The old name is no longer
+          available in v3.0.*
+        
+          Since: v2.1
+          
+          Extended by Eventlib to allow usage with `Ignore_Command_Intercept` context manager
+          """
     class EventType(m._EventType):
         INCOMING_CHAT_INTERCEPT:str = "incoming_chat_intercept"
         ENTITY_TOTEM_POPPED:str = "entity_totem_popped"
@@ -544,3 +586,10 @@ if TYPE_CHECKING:
         Executes the command, without intercepting it
         """
         command:str
+    __all__ = [
+        "EventQueue",
+        "EventType",
+        "Event",
+        "Ignore_Command_Intercept",
+        "execute"
+    ]
