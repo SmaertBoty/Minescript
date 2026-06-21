@@ -3,13 +3,31 @@ debug = False
 import socket
 from system.lib.java import eval_pyjinn_script as eps
 import json
+from threading import Thread
+import traceback
+from system.lib.minescript import version_info
+
+version = int("".join([n for n in version_info().minecraft if n.isdigit()]))
+
+if not str(version).startswith("1"): version = int("99"+str(version))
+
+version_mappings = {
+    "clicktype_const": {
+        (0,12111) : ("handleInventoryMouseClick","""ClickType = JavaClass("net.minecraft.world.inventory.ClickType")"""),
+        (99262,999999): ("handleContainerInput","""ClickType = JavaClass("net.minecraft.world.inventory.ContainerInput")""")
+    }
+}
+
+clicktype_mapping = [v for k,v in version_mappings["clicktype_const"].items() if k[0] <= version <= k[1]][0]
 
 bridge = socket.socket()
 bridge.bind(("127.0.0.1", 0))
 bridge.listen(1)
 port = bridge.getsockname()[1]
 
-script = eps(
+def _____():
+    try:
+        eps(
 r"""
 mc = JavaClass("net.minecraft.client.Minecraft").getInstance()
 ItemStack = JavaClass("net.minecraft.world.item.ItemStack")
@@ -21,7 +39,7 @@ Socket = JavaClass("java.net.Socket")
 StandardCharsets = JavaClass("java.nio.charset.StandardCharsets")
 BufferedReader = JavaClass("java.io.BufferedReader")
 InputStreamReader = JavaClass("java.io.InputStreamReader")
-ClickType = JavaClass("net.minecraft.world.inventory.ClickType")
+""" + clicktype_mapping[1] + r"""
 RegistryOps = JavaClass("net.minecraft.resources.RegistryOps")
 
 bridge = Socket("127.0.0.1", """ + str(port) + r""")
@@ -50,17 +68,17 @@ def inventory():
 def pickup(slot,mouse):
     slot = int(slot)
     mouse = int(mouse)
-    mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId, slot, mouse, ClickType.PICKUP, mc.player)
+    mc.gameMode.""" + clicktype_mapping[0] + r"""(mc.player.containerMenu.containerId, slot, mouse, ClickType.PICKUP, mc.player)
 
 def quickmove(slot,mouse):
     slot = int(slot)
     mouse = int(mouse)
-    mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId, slot, mouse, ClickType.QUICK_MOVE, mc.player)
+    mc.gameMode.""" + clicktype_mapping[0] + r"""(mc.player.containerMenu.containerId, slot, mouse, ClickType.QUICK_MOVE, mc.player)
 
 def swap(slot1,slot2):
     slot1 = int(slot1)
     slot2 = int(slot2)
-    mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId, slot1, slot2, ClickType.SWAP, mc.player)
+    mc.gameMode.""" + clicktype_mapping[0] + r"""(mc.player.containerMenu.containerId, slot1, slot2, ClickType.SWAP, mc.player)
 
 def open():
     mc.options.keyInventory.setDown(True)
@@ -94,6 +112,8 @@ def frame(_):
 
 add_event_listener("render",frame)
 """)
+    except: pass
+Thread(target=_____,daemon=True).start()
 
 conn, _ = bridge.accept()
 file = conn.makefile(mode="rw")
@@ -113,19 +133,19 @@ def inventory() -> list[dict]:
     """
     return json.loads(await_function_call("inventory"))
 
-def pickup(slot,mouse=1):
+def pickup(slot:int,mouse:int=1):
     """
     Simulate a pickup action on a slot
     """
     await_function_call("pickup",str(slot),str(mouse))
 
-def quickmove(slot,mouse=1):
+def quickmove(slot:int,mouse:int=1):
     """
     Simulate a quickmove action on a slot
     """
     await_function_call("quickmove",str(slot),str(mouse))
 
-def swap(slot1,slot2):
+def swap(slot1:int,slot2:int):
     """
     Simulate a swap action on 2 slots
     """
@@ -137,7 +157,7 @@ def open():
     """
     await_function_call("open")
 
-def get_item(slot) -> dict:
+def get_item(slot:int) -> dict:
     """
     Get the item from a slot
     """
