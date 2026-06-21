@@ -13,7 +13,7 @@ version_mappings = {
 
 keyevent_mapping = [v for k,v in version_mappings["keyevent_const"].items() if k[0] <= version <= k[1]][0]
 
-from system.lib.minescript import *
+#from system.lib.minescript import *
 from threading import Thread
 from system.lib.java import eval_pyjinn_script as eps
 import socket
@@ -51,14 +51,14 @@ def __serve_listener__():
                 for queue in queues:
                     queue.put({
                         "type": m.EventType.ENTITY_TOTEM_POPPED,
-                        "entity": [e for e in entities() if e.uuid == event["uuid"]][0]
+                        "entity": [e for e in m.entities() if e.uuid == event["uuid"]][0]
                     })
             elif event["event"] == "entity_died":
                 queues = registered_entity_died.copy()
                 for queue in queues:
                     queue.put({
                         "type": m.EventType.ENTITY_DIED,
-                        "entity": [e for e in entities() if e.uuid == event["uuid"]][0]
+                        "entity": [e for e in m.entities() if e.uuid == event["uuid"]][0]
                     })
             elif event["event"] == "server_particle":
                 queues = registered_particle.copy()
@@ -128,7 +128,7 @@ def __serve_listener__():
                         "execute": lambda: m.execute(fr"""\eval '__script__.vars["game"]["eventlib"]["{identifier}"]["command_intercept"]["block"] = False' 'execute("{event["command"]}")'""")
                     })
             queues = []
-        except: log(f"Malformed json event: '{line}'")
+        except: m.log(f"Malformed json event: '{line}'")
 
 script = eps(
 r"""
@@ -169,6 +169,7 @@ writer = BufferedWriter(OutputStreamWriter(bridge.getOutputStream(), StandardCha
 hp = player_health()
 food = [mc.player.getFoodData().getFoodLevel(),mc.player.getFoodData().getSaturationLevel()]
 ab_timestamp_predicted = reflect_field(mc.gui,"overlayMessageTime")
+chatlength = len(list(reflect_field(mc.gui.getChat(), "allMessages")))
 
 def add_event(event):
     writer.write(event.replace("\n",r"\n") + "\n")
@@ -192,8 +193,8 @@ def s2c(event):
                 event.cancel()
                 field = reflect_field(mc.player.connection,"nextChatIndex",True)
                 field.setInt(mc.player.connection, field.get(mc.player.connection)+1)
-        elif __script__.vars["game"]["eventlib"][identifier]["chat_listener"]:
-            add_event('{"event":"chat_event","text":"' + dat + '","json":' + json_string + '}')
+        #elif __script__.vars["game"]["eventlib"][identifier]["chat_listener"]:
+        #    add_event('{"event":"chat_event","text":"' + dat + '","json":' + json_string + '}')
 
     if isinstance(event.packet, ClientboundEntityEventPacket):
         if __script__.vars["game"]["eventlib"][identifier]["entity_totem_popped"]:
@@ -241,10 +242,36 @@ def tick(event):
             add_event('{"event":"actionbar_change","message":"' + nab + '"}')
         ab_timestamp_predicted = time
 
+def reverse(lst):
+    out = [None for _ in range(len(lst))]
+    i = len(lst)-1
+    if i > 0:
+        for item in lst:
+            out[i] = item
+            i -= 1
+    else: return lst
+    return out
+
+def frame(_):
+    global chatlength
+    msgs = list(reflect_field(mc.gui.getChat(), "allMessages"))
+    new = []
+    if len(msgs) > chatlength:
+        for i in range(len(msgs)- chatlength):
+            new.append(msgs[i].content())
+        chatlength = len(msgs)
+        if __script__.vars["game"]["eventlib"][identifier]["chat_listener"]:
+            for comp in reverse(new):
+                dat = comp.getString()
+                json_string = GsonBuilder().create().toJson(ComponentSerialization.CODEC.encodeStart(RegistryOps.create(JsonOps.INSTANCE, mc.level.registryAccess()),comp).getOrThrow())
+                add_event('{"event":"chat_event","text":"' + dat + '","json":' + json_string + '}')
+    elif len(msgs) < chatlength-1: chatlength = len(msgs)
+
 add_event_listener("tick",tick)
 add_event_listener("clientbound_packet",s2c)
 add_event_listener("key",key_event)
 add_event_listener("serverbound_packet",c2s)
+add_event_listener("render",frame)
 """)
 conn, _ = bridge.accept()
 file = conn.makefile(encoding="utf-8")
@@ -272,12 +299,12 @@ class INCOMING_CHAT_INTERCEPT:
 @dataclass
 class ENTITY_TOTEM_POPPED:
     type:str
-    entity:EntityData
+    entity:m.EntityData
 
 @dataclass
 class ENTITY_DIED:
     type:str
-    entity:EntityData
+    entity:m.EntityData
 
 @dataclass
 class SERVER_PARTICLE:
@@ -328,7 +355,7 @@ class EventlibKeyEvent(m.KeyEvent):
 class COMMAND_INTERCEPT:
     type:str
     command:str
-    execute:Callable
+    execute:m.Callable
 
 def _execute(command: str):
     current_executor(command)
@@ -475,6 +502,26 @@ m.EventQueue.eventlib_listeners = []
 
 if TYPE_CHECKING:
     class EventQueue(m.EventQueue(),m.EventQueue):
+        """Queue for managing events.
+
+          Implements context management so that it can be used with a `with` expression
+          to automatically unregister event listeners at the end of the block, e.g.
+        
+          ```
+          with EventQueue() as event_queue:
+            event_queue.register_chat_listener()
+            while True:
+              event = event_queue.get()
+              if event.type == EventType.CHAT and "knock knock" in event.message.lower():
+                echo("Who's there?")
+          ```
+        
+          Compatibility: Python only. (See `add_event_listener` and `EventLoop` for Pyjinn event handling.)
+        
+          Since: v4.0
+
+          Extended by Eventlib to include extra events
+          """
         eventlib_listeners = []
         def register_incoming_chat_interceptor(self,*,startswith:str=""): ...
         def register_totem_popped_listener(self): ...
@@ -561,12 +608,12 @@ if TYPE_CHECKING:
         type:str
         time:float
         message:str
-        entity:EntityData
-        position:BlockPos|Vector3f
+        entity:m.EntityData
+        position:m.BlockPos|m.Vector3f
         old_state:str
         new_state:str
         player_uuid:str
-        item:ItemStack
+        item:m.ItemStack
         amount:int
         entity_uuid:str
         cause_uuid:str
@@ -581,7 +628,7 @@ if TYPE_CHECKING:
         json:dict
         key:int
         pretty_key:str
-        execute:Callable
+        execute:m.Callable
         """
         Executes the command, without intercepting it
         """
@@ -590,6 +637,11 @@ if TYPE_CHECKING:
         "EventQueue",
         "EventType",
         "Event",
+        "Ignore_Command_Intercept",
+        "execute"
+    ]
+else:
+    __all__ = [
         "Ignore_Command_Intercept",
         "execute"
     ]
