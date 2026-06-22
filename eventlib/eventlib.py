@@ -176,7 +176,7 @@ def add_event(event):
     writer.flush()
 
 def s2c(event):
-    if __script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["state"] or __script__.vars["game"]["eventlib"][identifier]["chat_listener"]:
+    if __script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["state"]: # or __script__.vars["game"]["eventlib"][identifier]["chat_listener"]:
         if isinstance(event.packet, ClientboundSystemChatPacket):
             if event.packet.overlay(): return
             comp = event.packet.content()
@@ -187,12 +187,12 @@ def s2c(event):
             comp = event.packet.body()
             json_string = '{"text":"' + dat + '"}'
         else: return
-        if __script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["state"]:
-            if dat.startswith(__script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["startswith"]):
-                add_event('{"event":"intercept_incoming_chat","text":"' + dat + '","json":' + json_string + '}')
-                event.cancel()
-                field = reflect_field(mc.player.connection,"nextChatIndex",True)
-                field.setInt(mc.player.connection, field.get(mc.player.connection)+1)
+        #if __script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["state"]:
+        if dat.startswith(__script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["startswith"]):
+            add_event('{"event":"intercept_incoming_chat","text":"' + dat + '","json":' + json_string + '}')
+            event.cancel()
+            field = reflect_field(mc.player.connection,"nextChatIndex",True)
+            field.setInt(mc.player.connection, field.get(mc.player.connection)+1)
         #elif __script__.vars["game"]["eventlib"][identifier]["chat_listener"]:
         #    add_event('{"event":"chat_event","text":"' + dat + '","json":' + json_string + '}')
 
