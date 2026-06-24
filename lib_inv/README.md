@@ -20,6 +20,9 @@ Easily and quickly manipulate the inventory.
 ### `get_item(slot) -> dict`
 - Get an item from a slot
 
+### `close()`
+- Closes any openn gui
+
 
 ## Example usage
 The following script will dump all diamonds from your inventory into the targeted chest
