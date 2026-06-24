@@ -17,12 +17,11 @@ Easily and quickly manipulate the inventory.
 ### `open()`
 - Opens up the players inventory
 
-### `get_item(slot) -> dict`
-- Get an item from a slot
-
 ### `close()`
 - Closes any openn gui
 
+### `get_item(slot) -> dict`
+- Get an item from a slot
 
 ## Example usage
 The following script will dump all diamonds from your inventory into the targeted chest
