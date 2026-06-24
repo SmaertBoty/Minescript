@@ -4,7 +4,6 @@ import socket
 from system.lib.java import eval_pyjinn_script as eps
 import json
 from threading import Thread
-import traceback
 from system.lib.minescript import version_info
 
 version = int("".join([n for n in version_info().minecraft if n.isdigit()]))
@@ -41,6 +40,7 @@ BufferedReader = JavaClass("java.io.BufferedReader")
 InputStreamReader = JavaClass("java.io.InputStreamReader")
 """ + clicktype_mapping[1] + r"""
 RegistryOps = JavaClass("net.minecraft.resources.RegistryOps")
+InventoryScreen = JavaClass("net.minecraft.client.gui.screens.inventory.InventoryScreen")
 
 bridge = Socket("127.0.0.1", """ + str(port) + r""")
 bridge.setSoTimeout(1)
@@ -80,9 +80,11 @@ def swap(slot1,slot2):
     slot2 = int(slot2)
     mc.gameMode.""" + clicktype_mapping[0] + r"""(mc.player.containerMenu.containerId, slot1, slot2, ClickType.SWAP, mc.player)
 
-def open():
-    mc.options.keyInventory.setDown(True)
-    mc.options.keyInventory.setDown(False)
+def open(*_):
+    mc.setScreen(InventoryScreen(mc.player))
+
+def close(*_):
+    mc.player.closeContainer()
 
 def get_item(slot):
     _slot = int(slot)
@@ -97,18 +99,27 @@ callables = {
 "quickmove":quickmove,
 "swap":swap,
 "open":open,
-"get_item":get_item
+"get_item":get_item,
+"close":close
 }
 
 def frame(_):
-    try: line = reader.readLine()
-    except Exception as e:
-        if """ + str(debug) + r""": echo(e)
-        return
-    if line:
+    lines = []
+    iters = 0
+    while True:
+        iters += 1
+        if iters > 100: log("[Lib_inv] Overloaded! Exiting reader...") ; break
+        try:
+            line = reader.readLine()
+            if line: lines.append(line)
+            else: break
+        except Exception as e:
+            break
+    for line in lines:
         cmd = line.split(":")
-        if cmd[1]: return_call(callables[cmd[0]](*cmd[1].split(",")))
-        else: return_call(callables[cmd[0]]())
+        print(cmd[0])
+        if cmd[0][0] == "R": return_call(callables[cmd[0][1:]](*cmd[1].split(",")))
+        else: callables[cmd[0][1:]](*cmd[1].split(","))
 
 add_event_listener("render",frame)
 """)
@@ -116,16 +127,20 @@ add_event_listener("render",frame)
 Thread(target=_____,daemon=True).start()
 
 conn, _ = bridge.accept()
-file = conn.makefile(mode="rw")
+file = conn.makefile(mode="rw",encoding="utf-8")
 
 def await_function_call(func_name,*args):
-    file.write(f"{func_name}:{",".join(args) if args else ""}\n")
+    file.write(f"R{func_name}:{",".join(args) if args else ""}\n")
     file.flush()
     while True:
         line = file.readline()
         if not line: continue
         else: break
     return line[:-1]
+
+def noreturn_function_call(func_name,*args):
+    file.write(f"N{func_name}:{",".join(args) if args else ""}\n")
+    file.flush()
 
 def inventory() -> list[dict]:
     """
@@ -137,25 +152,31 @@ def pickup(slot:int,mouse:int=1):
     """
     Simulate a pickup action on a slot
     """
-    await_function_call("pickup",str(slot),str(mouse))
+    noreturn_function_call("pickup",str(slot),str(mouse))
 
 def quickmove(slot:int,mouse:int=1):
     """
     Simulate a quickmove action on a slot
     """
-    await_function_call("quickmove",str(slot),str(mouse))
+    noreturn_function_call("quickmove",str(slot),str(mouse))
 
 def swap(slot1:int,slot2:int):
     """
     Simulate a swap action on 2 slots
     """
-    await_function_call("swap",str(slot1),str(slot2))
+    noreturn_function_call("swap",str(slot1),str(slot2))
 
 def open():
     """
     Opens up the players inventory
     """
-    await_function_call("open")
+    noreturn_function_call("open")
+
+def close():
+    """
+    Closes any openn gui
+    """
+    noreturn_function_call("close")
 
 def get_item(slot:int) -> dict:
     """
