@@ -57,7 +57,7 @@ def return_call(data):
 def serialize_stack(itemstack):
     return GsonBuilder().create().toJson(ItemStack.CODEC.encodeStart(RegistryOps.create(JsonOps.INSTANCE, mc.level.registryAccess()), itemstack).getOrThrow())
 
-def inventory():
+def inventory(*_):
     out = []
     for slot in mc.player.containerMenu.slots:
         itemstack = slot.getItem()
