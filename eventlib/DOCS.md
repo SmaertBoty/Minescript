@@ -99,3 +99,8 @@ execute: Callable
 - Populate a `pretty_key` field with the pretty name of the GLFW key in CamelCase (ie.: `A`, `B`, `Left Control` etc...), if eventlib is enabled in the registering function, otherwise it uses the builtin protocol
 - `register_key_listener(eventlib=True)`
 - Optional, `False` by default
+
+### Outgoing chat intercept event
+- Allows capturing of messages sent via `chat()`, and automatically appends the message to the command history, if eventlib is enabled in the registering function, otherwise it uses the builtin protocol
+- `register_outgoing_chat_interceptor(eventlib=True)`
+- Optional, `False` by default
