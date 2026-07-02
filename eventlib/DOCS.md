@@ -101,6 +101,6 @@ execute: Callable
 - Optional, `False` by default
 
 ### Outgoing chat intercept event
-- Allows capturing of messages sent via `chat()`, and automatically appends the message to the command history, if eventlib is enabled in the registering function, otherwise it uses the builtin protocol
+- Allows capturing of messages sent via `chat()`, and automatically appends manually sent messages to the command history, if eventlib is enabled in the registering function, otherwise it uses the builtin protocol
 - `register_outgoing_chat_interceptor(eventlib=True)`
 - Optional, `False` by default
