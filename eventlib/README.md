@@ -15,6 +15,7 @@ As of now, it contains:
 And also updated:
 - `ChatEvent` -> Optionally populate `.json`
 - `KeyEvent` -> Optionally populate `.pretty_key`
+- `OutgoingChatInterceptEvent` -> Optionally also capture messages sent by `chat()`, and automatically appends the message to the command history
 
 And i would like to ask you (🫵) for events you would like to see
 
@@ -40,6 +41,7 @@ events.register_command_interceptor()
 
 events.register_chat_listener(eventlib=True) # Enables the .json value on the event
 events.register_key_listener(eventlib=True) # Enables the .pretty_key value on the event
+events.register_outgoing_chat_interceptor(eventlib=True) # Also captures messages sent via 'chat()'
 
 while True:
     event = events.get()
@@ -71,4 +73,6 @@ while True:
         event.execute()
         with Ignore_Command_Intercept:
             execute("/say This was not intercepted!")
+    if event.type == EventType.OUTGOING_CHAT_INTERCEPT:
+        echo(f";Intercepted: {event.message}")
 ```
