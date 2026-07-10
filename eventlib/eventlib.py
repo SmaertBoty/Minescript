@@ -208,7 +208,7 @@ def s2c(event):
         elif isinstance(event.packet, ClientboundPlayerChatPacket):
             dat = event.packet.body().content()
             comp = event.packet.body()
-            json_string = '{"text":"' + dat + '"}'
+            json_string = '{"text":"' + sanitize_string(dat) + '"}'
         else: return
         if dat.startswith(__script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["startswith"]):
             add_event('{"event":"intercept_incoming_chat","text":"' + sanitize_string(dat) + '","json":' + json_string + '}')
@@ -234,7 +234,7 @@ def c2s(event):
     if __script__.vars["game"]["eventlib"][identifier]["command_intercept"]["state"]:
         if isinstance(event.packet, ServerboundChatCommandPacket) or isinstance(event.packet, ServerboundChatCommandSignedPacket):
             if __script__.vars["game"]["eventlib"][identifier]["command_intercept"]["block"]:
-                add_event('{"event":"command_intercept","command":"' + event.packet.command() + '"}')
+                add_event('{"event":"command_intercept","command":"' + sanitize_string(event.packet.command()) + '"}')
                 event.cancel()
             else: __script__.vars["game"]["eventlib"][identifier]["command_intercept"]["block"] = True
     if __script__.vars["game"]["eventlib"][identifier]["outgoing_chat"]["state"]:
@@ -242,13 +242,13 @@ def c2s(event):
             if __script__.vars["game"]["eventlib"][identifier]["outgoing_chat"]["filter"] == 0:
                 if event.packet.message().startswith(__script__.vars["game"]["eventlib"][identifier]["outgoing_chat"]["startswith"]):
                     event.cancel()
-                    add_event('{"event":"outgoing_chat","text":"' + event.packet.message() + '","match":null}')
+                    add_event('{"event":"outgoing_chat","text":"' + sanitize_string(event.packet.message()) + '","match":null}')
             elif __script__.vars["game"]["eventlib"][identifier]["outgoing_chat"]["filter"] == 1:
                 matcher = Pattern.compile(__script__.vars["game"]["eventlib"][identifier]["outgoing_chat"]["pattern"]).matcher(event.packet.message())
                 if matcher.lookingAt():
                     event.cancel()
-                    match = [matcher.group(i) for i in range(matcher.groupCount())]
-                    add_event('{"event":"outgoing_chat","text":"' + event.packet.message() + '","match":' + str(match) + '}')
+                    match = [sanitize_string(matcher.group(i)) for i in range(matcher.groupCount())]
+                    add_event('{"event":"outgoing_chat","text":"' + sanitize_string(event.packet.message()) + '","match":' + str(match) + '}')
 
 def key_event(event):
     if __script__.vars["game"]["eventlib"][identifier]["key_listener"]:
@@ -273,7 +273,7 @@ def tick(event):
         except: nab = None
         time = reflect_field(mc.gui,"overlayMessageTime")
         if time != ab_timestamp_predicted-1 and time > 0:
-            add_event('{"event":"actionbar_change","message":"' + nab + '"}')
+            add_event('{"event":"actionbar_change","message":"' + sanitize_string(nab) + '"}')
         ab_timestamp_predicted = time
 
 def frame(_):
