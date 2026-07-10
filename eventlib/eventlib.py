@@ -170,6 +170,19 @@ def reflect_field(_class, field_name, raw=False):
     if not raw: return field.get(_class)
     else: return field
 
+def reverse(lst):
+    out = [None for _ in range(len(lst))]
+    i = len(lst)-1
+    if i > 0:
+        for item in lst:
+            out[i] = item
+            i -= 1
+    else: return lst
+    return out
+
+def sanitize_string(s):
+    return s.replace('"','\\"')
+
 identifier = '""" + identifier + r"""'
 if "eventlib" not in __script__.vars["game"]:
     __script__.vars["game"]["eventlib"] = {}
@@ -186,7 +199,7 @@ def add_event(event):
     writer.flush()
 
 def s2c(event):
-    if __script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["state"] or __script__.vars["game"]["eventlib"][identifier]["chat_listener"]:
+    if __script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["state"]:# or __script__.vars["game"]["eventlib"][identifier]["chat_listener"]:
         if isinstance(event.packet, ClientboundSystemChatPacket):
             if event.packet.overlay(): return
             comp = event.packet.content()
@@ -197,21 +210,20 @@ def s2c(event):
             comp = event.packet.body()
             json_string = '{"text":"' + dat + '"}'
         else: return
-        if __script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["state"]:
-            if dat.startswith(__script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["startswith"]):
-                add_event('{"event":"intercept_incoming_chat","text":"' + dat + '","json":' + json_string + '}')
-                event.cancel()
-                field = reflect_field(mc.player.connection,"nextChatIndex",True)
-                field.setInt(mc.player.connection, field.get(mc.player.connection)+1)
+        if dat.startswith(__script__.vars["game"]["eventlib"][identifier]["intercept_incoming_chat"]["startswith"]):
+            add_event('{"event":"intercept_incoming_chat","text":"' + sanitize_string(dat) + '","json":' + json_string + '}')
+            event.cancel()
+            field = reflect_field(mc.player.connection,"nextChatIndex",True)
+            field.setInt(mc.player.connection, field.get(mc.player.connection)+1)
         #elif __script__.vars["game"]["eventlib"][identifier]["chat_listener"]:
         #    add_event('{"event":"chat_event","text":"' + dat + '","json":' + json_string + '}')
 
     if isinstance(event.packet, ClientboundEntityEventPacket):
         if __script__.vars["game"]["eventlib"][identifier]["entity_totem_popped"]:
-            if int(event.packet.getEventId()) == 35: 
+            if int(event.packet.getEventId()) == 35:
                 add_event('{"event":"entity_totem_popped","uuid":"' + event.packet.getEntity(mc.level).getStringUUID() + '"}')
         if __script__.vars["game"]["eventlib"][identifier]["entity_died"]:
-            if int(event.packet.getEventId()) == 3: 
+            if int(event.packet.getEventId()) == 3:
                 add_event('{"event":"entity_died","uuid":"' + event.packet.getEntity(mc.level).getStringUUID() + '"}')
     
     if __script__.vars["game"]["eventlib"][identifier]["server_particle"]:
@@ -264,16 +276,6 @@ def tick(event):
             add_event('{"event":"actionbar_change","message":"' + nab + '"}')
         ab_timestamp_predicted = time
 
-def reverse(lst):
-    out = [None for _ in range(len(lst))]
-    i = len(lst)-1
-    if i > 0:
-        for item in lst:
-            out[i] = item
-            i -= 1
-    else: return lst
-    return out
-
 def frame(_):
     global chatlength
     msgs = list(reflect_field(mc.gui.getChat(), "allMessages"))
@@ -286,7 +288,7 @@ def frame(_):
             for comp in reverse(new):
                 dat = comp.getString()
                 json_string = GsonBuilder().create().toJson(ComponentSerialization.CODEC.encodeStart(RegistryOps.create(JsonOps.INSTANCE, mc.level.registryAccess()),comp).getOrThrow())
-                add_event('{"event":"chat_event","text":"' + dat + '","json":' + json_string + '}')
+                add_event('{"event":"chat_event","text":"' + sanitize_string(dat) + '","json":' + json_string + '}')
     elif len(msgs) < chatlength-1: chatlength = len(msgs)
 
 add_event_listener("tick",tick)
@@ -705,10 +707,12 @@ if TYPE_CHECKING:
         "EventType",
         "Event",
         "Ignore_Command_Intercept",
-        "execute"
+        "execute",
+        "identifier"
     ]
 else:
     __all__ = [
         "Ignore_Command_Intercept",
-        "execute"
+        "execute",
+        "identifier"
     ]
