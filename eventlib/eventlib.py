@@ -3,11 +3,12 @@ import sys
 if int("".join([n for n in m.version_info().minescript if n.isdigit()])) < 5011: sys.exit("[Eventlib] Please update to 5.0b11!")
 
 version = int("".join([n for n in m.version_info().minecraft if n.isdigit()]))
+if not str(version).startswith("1"): version = int("99"+str(version))
 
 version_mappings = {
     "keyevent_const": {
         (0,12108) : ("event.key,event.scan_code",""),
-        (12109,12111): ("KeyEvent(event.key,event.scan_code,event.modifiers)","""KeyEvent = JavaClass("net.minecraft.client.input.KeyEvent")""")
+        (12109,999999): ("KeyEvent(event.key,event.scan_code,event.modifiers)","""KeyEvent = JavaClass("net.minecraft.client.input.KeyEvent")""")
     }
 }
 
