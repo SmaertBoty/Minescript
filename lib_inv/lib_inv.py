@@ -117,7 +117,6 @@ def frame(_):
             break
     for line in lines:
         cmd = line.split(":")
-        print(cmd[0])
         if cmd[0][0] == "R": return_call(callables[cmd[0][1:]](*cmd[1].split(",")))
         else: callables[cmd[0][1:]](*cmd[1].split(","))
 
