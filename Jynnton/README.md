@@ -40,7 +40,7 @@ These specify what java classes your function requires:
 #### Special:
 - These are special lines of code, that get executed upon creating the function. Include them with `special@code_snippet`
 ### Event flag
-- Specify an event that will call the function
+- Specify an event that will call the function. Use it with `event="event_name"`
 - Possible events are all builtin Pyjinn events
 ### Return flag
 - Specify wheter this function returns a piece of data. Use it with `type="returning" / "noreturn"`
