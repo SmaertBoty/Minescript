@@ -13,6 +13,11 @@ def listify(*args):
         lst.add(arg)
     return List.copyOf(lst)
 
+def isdigit(item):
+    try: float(item) ; return True
+    except: pass
+    return False
+
 def mapify_pyjinndict(pyjinndict):
     out = HashMap()
     for key,value in pyjinndict.items():
@@ -44,7 +49,7 @@ def loads(s:str):
     if s.strip().startswith("["): return handle_fromjson(Gson.fromJson(s, type(List)))
     elif s.strip().startswith("{"): return handle_fromjson(Gson.fromJson(s, type(Map)))
     elif s.strip().startswith("null"): return None
-    elif s.strip().isdigit(): return float(s)
+    elif isdigit(s.strip()): return float(s)
     else: return s
 
 def dumps(obj):
