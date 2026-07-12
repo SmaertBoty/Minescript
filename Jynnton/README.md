@@ -47,6 +47,7 @@ These specify what java classes your function requires:
 - Possible flags:
   - `noreturn` (default)
   - `returning`
+
 Example usage of decorator flags:
 - A function that uses common flags, and the render event to render a cube at 0,0,0
 ```py
