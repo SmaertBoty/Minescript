@@ -43,7 +43,7 @@ These specify what java classes your function requires:
 - Specify an event that will call the function
 - Possible events are all builtin Pyjinn events
 ### Return flag
-- Specify wheter this function returns a piece of data
+- Specify wheter this function returns a piece of data. Use it with `type="returning" / "noreturn"`
 - Possible flags:
   - `noreturn` (default)
   - `returning`
