@@ -2,7 +2,7 @@
 Easily and quickly manipulate the inventory.
 
 Requirements:
-- python 3.13+
+- python 3.12+
 - mappings (`\install_mappings`)
 # Functions
 
