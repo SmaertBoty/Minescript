@@ -1,5 +1,9 @@
 # Lib Inv
 Easily and quickly manipulate the inventory.
+
+Requirements:
+- python 3.13+
+- mappings (`\install_mappings`)
 # Functions
 
 ### `inventory() -> list[dict]`
