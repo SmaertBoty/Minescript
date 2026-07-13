@@ -9,14 +9,18 @@ Requirements:
 ### `inventory() -> list[dict]`
 - returns the players inventory as a list of dicts (items)
 
-### `pickup(slot,mouse=1)`
+### `pickup(slot,mouse=0)`
 - Simulate a pickup action on a slot
 
-### `quickmove(slot,mouse=1)`
+### `quickmove(slot,mouse=0)`
 - Simulate a quickmove action on a slot
 
 ### `swap(slot1,slot2)`
 - Simulate a swap action on 2 slots
+
+### `throw(slot:int,stack:bool=False)`
+- Simulate a throw action on a slot
+- if `stack` is true, drop a whole stack
 
 ### `open()`
 - Opens up the players inventory
