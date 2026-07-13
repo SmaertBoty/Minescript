@@ -27,7 +27,7 @@ The decorator also allows you to attach special metadata to the function
 ### Include flags
 These specify what java classes your function requires:
 #### Common:
-- These are builtin, commonly used classes / modifiers. Inlude them using `"common@"modifier`
+- These are builtin, commonly used classes / modifiers. Inlude them using `"common@modifier"`
 - Possible classes:
   - `mc` -> `net.minecraft.client.Minecraft.getInstance()`
   - `mappings` -> `net.minescript.common.Minescript.mappingsLoader.get()`
