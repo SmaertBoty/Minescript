@@ -149,13 +149,13 @@ def inventory() -> list[dict]:
     """
     return json.loads(await_function_call("inventory"))
 
-def pickup(slot:int,mouse:int=1):
+def pickup(slot:int,mouse:int=0):
     """
     Simulate a pickup action on a slot
     """
     noreturn_function_call("pickup",str(slot),str(mouse))
 
-def quickmove(slot:int,mouse:int=1):
+def quickmove(slot:int,mouse:int=0):
     """
     Simulate a quickmove action on a slot
     """
