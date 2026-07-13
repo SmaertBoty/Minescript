@@ -35,6 +35,7 @@ These specify what java classes your function requires:
   - `GizmoStyle` -> `net.minecraft.gizmos.GizmoStyle`
   - `ARGB` -> `net.minecraft.util.ARGB`
   - `BlockPos` -> `net.minecraft.core.BlockPos`
+  - `globals` -> This one gives you access to use the `globals` variable: `globals[key]`
 #### Class:
 - These are your extra classes that your function needs. Include them with `class@class.full.path`
 #### Special:
