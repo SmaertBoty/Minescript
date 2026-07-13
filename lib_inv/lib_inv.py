@@ -24,9 +24,7 @@ bridge.bind(("127.0.0.1", 0))
 bridge.listen(1)
 port = bridge.getsockname()[1]
 
-def _____():
-    try:
-        eps(
+eps(
 r"""
 mc = JavaClass("net.minecraft.client.Minecraft").getInstance()
 ItemStack = JavaClass("net.minecraft.world.item.ItemStack")
@@ -75,6 +73,11 @@ def quickmove(slot,mouse):
     mouse = int(mouse)
     mc.gameMode.""" + clicktype_mapping[0] + r"""(mc.player.containerMenu.containerId, slot, mouse, ClickType.QUICK_MOVE, mc.player)
 
+def throw(slot,all):
+    slot = int(slot)
+    all = int(all)
+    mc.gameMode.""" + clicktype_mapping[0] + r"""(mc.player.containerMenu.containerId, slot, all, ClickType.THROW, mc.player)
+
 def swap(slot1,slot2):
     slot1 = int(slot1)
     slot2 = int(slot2)
@@ -100,7 +103,8 @@ callables = {
 "swap":swap,
 "open":open,
 "get_item":get_item,
-"close":close
+"close":close,
+"throw":throw
 }
 
 def frame(_):
@@ -122,8 +126,6 @@ def frame(_):
 
 add_event_listener("render",frame)
 """)
-    except: pass
-Thread(target=_____,daemon=True).start()
 
 conn, _ = bridge.accept()
 file = conn.makefile(mode="rw",encoding="utf-8")
@@ -165,6 +167,12 @@ def swap(slot1:int,slot2:int):
     """
     noreturn_function_call("swap",str(slot1),str(slot2))
 
+def throw(slot:int,stack:bool=False):
+    """
+    Simulate a throw action on a slot
+    """
+    noreturn_function_call("throw",str(slot),str(1 if stack else 0))
+
 def open():
     """
     Opens up the players inventory
@@ -173,7 +181,7 @@ def open():
 
 def close():
     """
-    Closes any openn gui
+    Closes any open gui
     """
     noreturn_function_call("close")
 
