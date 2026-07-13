@@ -41,7 +41,7 @@ port = bridge.getsockname()[1]
 
 eps(
 r"""
-debug_log = True
+debug_log = False
 
 import pyjinn_json as json
 Minescript = JavaClass("net.minescript.common.Minescript")
