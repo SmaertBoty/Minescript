@@ -7,7 +7,7 @@ Requirements:
 # Functions
 
 ### `inventory() -> list[dict]`
-- returns the players inventory as a list of dicts (items)
+- returns the currently open inventory as a list of dicts (items)
 
 ### `pickup(slot,mouse=0)`
 - Simulate a pickup action on a slot
