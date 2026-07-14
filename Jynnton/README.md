@@ -6,6 +6,7 @@ Requirements:
 - Mappings (`\install_mappings`) for versions below 26.x
 - `pyjinn_json`: https://github.com/SmaertBoty/Minescript/blob/main/pyjinn/pyjinn_json.py
 - Only tested on version 1.21.11, but may work on other versions aswell
+- Python 3.12 +
 
 What this library allows you to do:
 - Execute Pyjinn code, straight from Python
