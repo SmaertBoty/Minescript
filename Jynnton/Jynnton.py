@@ -1,15 +1,16 @@
 import inspect
 import json
 import socket
-from system.lib.java import eval_pyjinn_script as eps, JavaObject
+from system.lib.java import eval_pyjinn_script as eps, JavaObject, JavaClassType
 from uuid import uuid4
 from concurrent.futures import Future
 from threading import Thread
 from functools import wraps
+import sys
 
 concurrent = {}
 
-def as_pyjinn(include={}, event=None, type="noreturn"):
+def as_pyjinn(include=[], event=None, type="noreturn"):
     def decorator(func):
         if not hasattr(func, "Jynnton_id"): func.Jynnton_id = str(uuid4())
         if not hasattr(func, "Jynnton_init"): func.Jynnton_init = True
@@ -33,12 +34,14 @@ def as_pyjinn(include={}, event=None, type="noreturn"):
             argdata = []
             i = 0
             for arg in args:
-                if isinstance(arg, JavaObject): preserve_payload = True ; out.append(fr"\%PRESERVED;{i}") ; argmetas.append(str(i)) ; argdata.append(arg)
+                if isinstance(arg, JavaObject):
+                    if isinstance(arg, JavaClassType): out.append(fr"\%ARGCLASS;{arg.class_name}")
+                    else: preserve_payload = True ; out.append(fr"\%PRESERVED;{i}") ; argmetas.append(str(i)) ; argdata.append(arg)
                 else: out.append(arg)
                 i += 1
             if preserve_payload: insert_type_preserving_data([ufcid,";".join(argmetas),*argdata])
             args = out
-            data = json.dumps({"code": "\n".join(code)[:-1], "includes": include, "event": event, "name": func.__name__, "id": func.Jynnton_id, "type": type, "ufcid": ufcid, "args": args, "init": kwargs["init"],"haspreserved":preserve_payload})
+            data = json.dumps({"code": "\n".join(code)[:-1], "includes": include, "event": event, "name": func.__name__, "id": func.Jynnton_id, "type": type, "ufcid": ufcid, "args": args, "init": kwargs["init"]})
             writer.write(data + "\n")
             writer.flush()
             if type == "returning" and not kwargs["init"]:
@@ -48,6 +51,7 @@ def as_pyjinn(include={}, event=None, type="noreturn"):
                 concurrent.pop(ufcid)
                 if resp["fail"]: raise RuntimeError(resp["result"])
                 return resp["result"]
+            else: return ufcid
         wrapper()
         return wrapper
     return decorator
@@ -87,6 +91,7 @@ __script__.vars["game"][portid] = {}
 __script__.vars["game"][portid]["globals"] = {}
 __script__.vars["game"][portid]["funcs"] = []
 __script__.vars["game"][portid]["callback"] = {}
+if "hotloaded_javaclasses" not in __script__.vars["game"]: __script__.vars["game"]["hotloaded_javaclasses"] = {}
 
 common = {
     "mc":'mc = JavaClass("net.minecraft.client.Minecraft").getInstance()',
@@ -132,6 +137,13 @@ def reverse(lst):
             i -= 1
     else: return lst
     return out
+
+def hotload_JavaClass(clss):
+    if clss in __script__.vars["game"]["hotloaded_javaclasses"]: return __script__.vars["game"]["hotloaded_javaclasses"][clss]
+    else:
+        q = "'"
+        execute(f'''\eval  {q}0{q} {q}__script__.vars["game"]["hotloaded_javaclasses"]["{clss}"] = JavaClass("{clss}"){q} ''')
+        return __script__.vars["game"]["hotloaded_javaclasses"][clss]
 
 def exec(source, name, expected_names:list=[], tied_event:str=None):
     log("[Jynnton] Creating new script instance")
@@ -185,20 +197,20 @@ def frame(_):
             log("[Jynnton] Caching uncached script")
         if not payload["init"]:
             try:
-                if not payload["haspreserved"]: result = cached_scripts[payload["id"]].invoke(payload["name"],*payload["args"]) ; fail = False
-                else:
-                    args = []
-                    for arg in payload["args"]:
-                        if isinstance(arg,str):
-                            if arg.startswith(r"\%PRESERVED;"):
-                                args.append(reserved_payloads[payload["ufcid"]][arg.split(";")[-1]])
-                            else: args.append(arg)
-                    del reserved_payloads[payload["ufcid"]]
-                    result = cached_scripts[payload["id"]].invoke(payload["name"],*args)
-                    fail = False
+                args = []
+                for arg in payload["args"]:
+                    if isinstance(arg,str):
+                        if arg.startswith(r"\%PRESERVED;"):
+                            args.append(reserved_payloads[payload["ufcid"]][arg.split(";")[-1]])
+                        elif arg.startswith(r"\%ARGCLASS;"):
+                            args.append(hotload_JavaClass(arg.split(";")[-1]))
+                        else: args.append(arg)
+                    else: args.append(arg)
+                del reserved_payloads[payload["ufcid"]]
+                result = cached_scripts[payload["id"]].invoke(payload["name"],*args)
+                fail = False
             except Exception as e: result = str(e) ; fail = True
-            if payload["type"] == "returning":
-                return_call({"fail":fail,"result":result,"ufcid":payload["ufcid"]})
+            return_call({"fail":fail,"result":result,"ufcid":payload["ufcid"]})
     for name, args in __script__.vars["game"][portid]["funcs"]:
         if debug_log: log(f"[Jynnton-Debug] Resolving invocation: {name}{args}")
         if "." in name:
@@ -238,6 +250,8 @@ def __reader__():
         line = reader.readline()
         data = json.loads(line[:-1])
         if data["ufcid"] in concurrent: concurrent[data["ufcid"]].set_result(data)
+        elif data["ufcid"] == 0: sys.stderr.write(f"Developer exception (How have you managed to do this?):\n{data["result"]}")
+        else: sys.stderr.write(f"The following could not be raised on the main thread:\n{data["result"]}\n \nNOTICE:\n The above error is the result of a non returning function call from Jynnton. For debugging purposes, enable 'returning' on any possible functions: '@as_pyjinn(type=\"returning\")'")
 
 Thread(target=__reader__,daemon=True).start()
 
