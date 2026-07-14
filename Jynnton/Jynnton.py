@@ -251,7 +251,7 @@ def __reader__():
         data = json.loads(line[:-1])
         if data["ufcid"] in concurrent: concurrent[data["ufcid"]].set_result(data)
         elif data["ufcid"] == 0: sys.stderr.write(f"Developer exception (How have you managed to do this?):\n{data["result"]}")
-        else: sys.stderr.write(f"The following could not be raised on the main thread:\n{data["result"]}\n \nNOTICE:\n The above error is the result of a non returning function call from Jynnton. For debugging purposes, enable 'returning' on any possible functions: '@as_pyjinn(type=\"returning\")'")
+        elif data["fail"]: sys.stderr.write(f"The following could not be raised on the main thread:\n{data["result"]}\n \nNOTICE:\n The above error is the result of a non returning function call from Jynnton. For debugging purposes, enable 'returning' on any possible functions: '@as_pyjinn(type=\"returning\")'")
 
 Thread(target=__reader__,daemon=True).start()
 
