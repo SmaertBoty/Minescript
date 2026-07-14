@@ -1,7 +1,7 @@
 import inspect
 import json
 import socket
-from system.lib.java import eval_pyjinn_script as eps
+from system.lib.java import eval_pyjinn_script as eps, JavaObject
 from uuid import uuid4
 from concurrent.futures import Future
 from threading import Thread
@@ -20,7 +20,25 @@ def as_pyjinn(include={}, event=None, type="noreturn"):
                 func.Jynnton_init = False
             elif "init" not in kwargs: kwargs["init"] = False
             ufcid = str(uuid4())
-            data = json.dumps({"code": "\n".join(inspect.getsource(func).split("\n")[1:])[:-1], "includes": include, "event": event, "name": func.__name__, "id": func.Jynnton_id, "type": type, "ufcid": ufcid, "args": args, "init": kwargs["init"]})
+            code = inspect.getsource(func).split("\n")[1:]
+            j = 0
+            if code[0].startswith(" "):
+                for i in code[0]:
+                    if i != " ": break
+                    j += 1
+                code = [line[j:] for line in code]
+            out = []
+            preserve_payload = False
+            argmetas = []
+            argdata = []
+            i = 0
+            for arg in args:
+                if isinstance(arg, JavaObject): preserve_payload = True ; out.append(fr"\%PRESERVED;{i}") ; argmetas.append(str(i)) ; argdata.append(arg)
+                else: out.append(arg)
+                i += 1
+            if preserve_payload: insert_type_preserving_data([ufcid,";".join(argmetas),*argdata])
+            args = out
+            data = json.dumps({"code": "\n".join(code)[:-1], "includes": include, "event": event, "name": func.__name__, "id": func.Jynnton_id, "type": type, "ufcid": ufcid, "args": args, "init": kwargs["init"],"haspreserved":preserve_payload})
             writer.write(data + "\n")
             writer.flush()
             if type == "returning" and not kwargs["init"]:
@@ -39,7 +57,7 @@ bridge.bind(("127.0.0.1", 0))
 bridge.listen(1)
 port = bridge.getsockname()[1]
 
-eps(
+script = eps(
 r"""
 debug_log = False
 
@@ -83,6 +101,7 @@ common = {
 
 cached_scripts = {}
 active_scripts = []
+reserved_payloads = {}
 
 class RuntimeScript:
     def __init__(self,this,namespace,name):
@@ -95,7 +114,11 @@ class RuntimeScript:
         array_args = Array.newInstance(type(Object),len(args))
         for i,arg in enumerate(args):
             Array.set(array_args, i, arg)
-        return self.namespace[func].call(self.script.mainModule().globals().env(),array_args)
+        if "." in func:
+            clss,method = func.split(".")
+            print(f"Calling {clss} - {func} {args}")
+            print(self.namespace[clss].callMethod(self.script.mainModule().globals().env(),func,array_args))
+        else: return self.namespace[func].call(self.script.mainModule().globals().env(),array_args)
 
 def map(callable,iterable):
     return [callable(i) for i in iterable]
@@ -161,22 +184,50 @@ def frame(_):
             cached_scripts[payload["id"]] = exec(payload["code"],payload["name"],payload["includes"],payload["event"])
             log("[Jynnton] Caching uncached script")
         if not payload["init"]:
-            try: result = cached_scripts[payload["id"]].invoke(payload["name"],*payload["args"]) ; fail = False
+            try:
+                if not payload["haspreserved"]: result = cached_scripts[payload["id"]].invoke(payload["name"],*payload["args"]) ; fail = False
+                else:
+                    args = []
+                    for arg in payload["args"]:
+                        if isinstance(arg,str):
+                            if arg.startswith(r"\%PRESERVED;"):
+                                args.append(reserved_payloads[payload["ufcid"]][arg.split(";")[-1]])
+                            else: args.append(arg)
+                    del reserved_payloads[payload["ufcid"]]
+                    result = cached_scripts[payload["id"]].invoke(payload["name"],*args)
+                    fail = False
             except Exception as e: result = str(e) ; fail = True
             if payload["type"] == "returning":
                 return_call({"fail":fail,"result":result,"ufcid":payload["ufcid"]})
     for name, args in __script__.vars["game"][portid]["funcs"]:
         if debug_log: log(f"[Jynnton-Debug] Resolving invocation: {name}{args}")
-        for script in active_scripts:
-            if debug_log: log(f"[Jynnton-Debug] Searching for function in {script.namespace}")
-            if name in script.namespace:
-                if debug_log: log(f"[Jynnton-Debug] Found name {name}")
-                script.invoke(name, *args)
+        if "." in name:
+            if debug_log: log(f"[Jynnton-Debug] Resolving invocation as class method invocation")
+            clss,method = name.split(".")
+            for script in active_scripts:
+                if debug_log: log(f"[Jynnton-Debug] Searching for class method in {script.namespace}")
+                if clss in script.namespace:
+                    if debug_log: log(f"[Jynnton-Debug] Found name {clss}")
+                    script.invoke(name, *args)
+        else:
+            for script in active_scripts:
+                if debug_log: log(f"[Jynnton-Debug] Searching for function in {script.namespace}")
+                if name in script.namespace:
+                    if debug_log: log(f"[Jynnton-Debug] Found name {name}")
+                    script.invoke(name, *args)
     __script__.vars["game"][portid]["funcs"] = []
 
 log("[Jynnton] Starting main loop")
 add_event_listener("render",frame)
+
+def insert_type_preserving_data(payload):
+    argmetas = payload[1].split(";")
+    out = {}
+    for i in range(len(argmetas)):
+        out[argmetas[i]] = payload[i+2]
+    reserved_payloads[payload[0]] = out
 """)
+insert_type_preserving_data = script.get("insert_type_preserving_data")
 
 conn, _ = bridge.accept()
 reader = conn.makefile("r", encoding="utf-8")
@@ -193,3 +244,5 @@ Thread(target=__reader__,daemon=True).start()
 @as_pyjinn(type="returning",include=["common@globals"])
 def snapshot_pyjinn_globals():
     return globals
+
+__all__ = ["as_pyjinn","snapshot_pyjinn_globals"]
