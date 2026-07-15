@@ -44,7 +44,7 @@ def handle_fromjson(obj):
 
 def handle_tojson(obj):
     if isinstance(obj, dict): return mapify_pyjinndict(obj)
-    elif isinstance(obj, list): return listify(*[handle_tojson(javaobj) for javaobj in obj])
+    elif isinstance(obj, (list,tuple)): return listify(*[handle_tojson(javaobj) for javaobj in obj])
     else: return obj
 
 def loads(s:str):
