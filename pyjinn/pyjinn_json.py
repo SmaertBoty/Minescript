@@ -14,6 +14,7 @@ def listify(*args):
     return List.copyOf(lst)
 
 def isdigit(item):
+    if item.startswith("-"): item = item[1:]
     try: float(item) ; return True
     except: pass
     return False
@@ -22,6 +23,7 @@ def mapify_pyjinndict(pyjinndict):
     out = HashMap()
     for key,value in pyjinndict.items():
         if isinstance(value,dict): v = mapify_pyjinndict(value)
+        elif isinstance(value, list): v =  listify(*[handle_tojson(javaobj) for javaobj in value])
         else: v = value
         out.put(key,v)
     return out
