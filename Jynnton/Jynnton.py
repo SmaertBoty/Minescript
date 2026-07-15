@@ -234,7 +234,7 @@ def main(_):
         for funcid in python_callables:
             if name == funcid:
                 if debug_log: log(f"[Jynnton-Debug] Found name {name}. Executing external invocation")
-                return_call({"fail":False,"ufcid":-1.0,"funcid":name,"args":args if args else []})
+                return_call({"fail":False,"ufcid":-1.0,"funcid":name,"args":list(args) if args else []})
     __script__.vars["game"][portid]["funcs"] = []
 
 log("[Jynnton] Starting main loop")
