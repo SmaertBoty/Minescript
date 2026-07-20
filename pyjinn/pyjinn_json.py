@@ -6,53 +6,60 @@ Map = JavaClass("java.util.Map")
 HashMap = JavaClass("java.util.HashMap")
 List = JavaClass("java.util.List")
 ArrayList = JavaClass("java.util.ArrayList")
+String = JavaClass("java.lang.String")
 
-def listify(*args):
+def _listify_pyjinnlist(items):
     lst = ArrayList()
-    for arg in args:
-        lst.add(arg)
-    return List.copyOf(lst)
+    for item in items:
+        lst.add(item)
+    return lst
 
-def isdigit(item):
+def _isdigit(item):
     if item.startswith("-"): item = item[1:]
     try: float(item) ; return True
     except: pass
     return False
 
-def mapify_pyjinndict(pyjinndict):
+def _mapify_pyjinndict(pyjinndict):
     out = HashMap()
     for key,value in pyjinndict.items():
-        if isinstance(value,dict): v = mapify_pyjinndict(value)
-        elif isinstance(value, list): v =  listify(*[handle_tojson(javaobj) for javaobj in value])
-        else: v = value
-        out.put(key,v)
+        out.put(key,_handle_tojson(value))
     return out
 
-def dictify_javamap(javamap):
+def _dictify_javamap(javamap):
     out = {}
     for key in javamap.keySet():
-        typ = str(type(javamap[key]))
-        if typ == 'JavaClass("com.google.gson.internal.LinkedTreeMap")': out[key] = dictify_javamap(javamap[key])
-        else: out[key] = javamap[key]
+        if isinstance(javamap[key], Map): out[key] = _dictify_javamap(javamap[key])
+        else: out[key] = _handle_fromjson(javamap[key])
     return out
 
-def handle_fromjson(obj):
-    typ = str(type(obj))
-    if typ == 'JavaClass("com.google.gson.internal.LinkedTreeMap")': return dictify_javamap(obj)
-    elif typ == 'JavaClass("java.util.List")': return listify(*[handle_fromjson(javaobj) for javaobj in obj])
+def _handle_fromjson(obj):
+    if isinstance(obj, Map): return _dictify_javamap(obj)
+    elif isinstance(obj, List): return [_handle_fromjson(javaobj) for javaobj in obj]
     else: return obj
 
-def handle_tojson(obj):
-    if isinstance(obj, dict): return mapify_pyjinndict(obj)
-    elif isinstance(obj, (list,tuple)): return listify(*[handle_tojson(javaobj) for javaobj in obj])
+def _handle_tojson(obj):
+    if isinstance(obj, dict): return _mapify_pyjinndict(obj)
+    elif isinstance(obj, (list, tuple)): return _listify_pyjinnlist([_handle_tojson(javaobj) for javaobj in obj])
     else: return obj
 
-def loads(s:str):
-    if s.strip().startswith("["): return handle_fromjson(Gson.fromJson(s, type(List)))
-    elif s.strip().startswith("{"): return handle_fromjson(Gson.fromJson(s, type(Map)))
-    elif s.strip().startswith("null"): return None
-    elif isdigit(s.strip()): return float(s)
-    else: return s
+def loads(json_string:str):
+    try:
+        json_string = json_string.strip()
+        if json_string.startswith("["): return _handle_fromjson(Gson.fromJson(json_string, type(List)))
+        elif json_string.startswith("{"): return _handle_fromjson(Gson.fromJson(json_string, type(Map)))
+        elif json_string == "null": return None
+        elif json_string == "true": return True
+        elif json_string == "false": return False
+        elif _isdigit(json_string):
+            if "." in json_string or "e" in json_string.lower(): return float(json_string)
+            else: return int(json_string)
+        elif json_string.startswith('"'):
+            if json_string.endswith('"'): return Gson.fromJson(json_string, type(String))
+            else: raise Exception(f"Unterminated string: {json_string}<<<")
+        else: raise Exception(f"Invalid literal: '{json_string}'")
+    except Exception as e: raise Exception(f"§eJSONDecodeException: {e.getMessage().replace("path $.","")}")
 
-def dumps(obj):
-    return Gson.toJson(handle_tojson(obj))
+def dumps(obj) -> str:
+    try: return Gson.toJson(_handle_tojson(obj))
+    except Exception as e: raise Exception(f"§eJSONEncodeException: {e.getMessage()}")
