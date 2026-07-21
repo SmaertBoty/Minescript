@@ -1,17 +1,3 @@
-# SPDX-FileCopyrightText: © 2026 @SmartBoty <https://github.com/SmartBoty>
-# SPDX-License-Identifier: GPL-3.0-only
-# Original source: https://github.com/SmartBoty/Minescript/blob/main/pyjinn/pyjinn_json.py
-
-"""json v6.0 distributed via Minescript jar file
-
-Intended for the Pyjinn environment created by Greg Christiana <maxuser@minescript.net>,
-
-This library provides a subset of the functionality of the Python json module.
-The Python standard library is licensed under the Python Software Foundation License Agreement
-(PSFL).
-"""
-
-
 #!python
 from system.pyj.minescript import JavaClass # juicy syntax coloring
 
@@ -44,8 +30,7 @@ def _mapify_pyjinndict(pyjinndict):
 def _dictify_javamap(javamap):
     out = {}
     for key in javamap.keySet():
-        if isinstance(javamap[key], Map): out[key] = _dictify_javamap(javamap[key])
-        else: out[key] = _handle_fromjson(javamap[key])
+        out[key] = _handle_fromjson(javamap.get(key))
     return out
 
 def _handle_fromjson(obj):
