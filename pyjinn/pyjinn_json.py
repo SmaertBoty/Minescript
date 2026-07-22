@@ -1,3 +1,17 @@
+# SPDX-FileCopyrightText: © 2026 @SmartBoty <https://github.com/SmartBoty>
+# SPDX-License-Identifier: GPL-3.0-only
+# Original source: https://github.com/SmartBoty/Minescript/blob/main/pyjinn/pyjinn_json.py
+
+"""json v6.0 distributed via Minescript jar file
+
+Intended for the Pyjinn environment created by Greg Christiana <maxuser@minescript.net>.
+
+This library provides a subset of the functionality of the Python json module.
+The Python standard library is licensed under the Python Software Foundation License Agreement
+(PSFL).
+"""
+
+
 #!python
 from system.pyj.minescript import JavaClass # juicy syntax coloring
 
@@ -8,6 +22,7 @@ HashMap = JavaClass("java.util.HashMap")
 List = JavaClass("java.util.List")
 ArrayList = JavaClass("java.util.ArrayList")
 String = JavaClass("java.lang.String")
+Long = JavaClass("java.lang.Long")
 
 def _listify_pyjinnlist(items):
     lst = ArrayList()
@@ -36,6 +51,7 @@ def _dictify_javamap(javamap):
 def _handle_fromjson(obj):
     if isinstance(obj, Map): return _dictify_javamap(obj)
     elif isinstance(obj, List): return [_handle_fromjson(javaobj) for javaobj in obj]
+    elif isinstance(obj, Long): return int(obj)
     else: return obj
 
 def _handle_tojson(obj):
