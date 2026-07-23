@@ -52,7 +52,7 @@ while True: sleep(1) # Keep the script alive
 ```
 
 This will render a cube at the block you are looking at
-```
+```py
 from Jynnton import as_pyjinn, add_event_listener, JynntonFlags
 from time import sleep
 
