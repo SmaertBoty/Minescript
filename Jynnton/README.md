@@ -50,3 +50,19 @@ add_event_listener("tick",tick)
 
 while True: sleep(1) # Keep the script alive
 ```
+
+This will render a cube at the block you are looking at
+```
+from Jynnton import as_pyjinn, add_event_listener, JynntonFlags
+from time import sleep
+
+@as_pyjinn(JynntonFlags.mc,JynntonFlags.JavaClass("net.minecraft.world.phys.BlockHitResult"),JynntonFlags.JavaClass("net.minecraft.gizmos.Gizmos"), JynntonFlags.JavaClass("net.minecraft.util.ARGB"), JynntonFlags.JavaClass("net.minecraft.core.BlockPos"), JynntonFlags.JavaClass("net.minecraft.gizmos.GizmoStyle") )
+def render(event):
+    hit = mc.hitResult
+    if hit:
+        if hit.getType() == BlockHitResult.Type.BLOCK:
+            Gizmos.cuboid(BlockPos(hit.getBlockPos()),GizmoStyle.stroke(ARGB.color(255,200,100,200))).setAlwaysOnTop()
+add_event_listener("render",render)
+
+while True: sleep(1) 
+```
