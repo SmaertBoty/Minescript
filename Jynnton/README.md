@@ -31,7 +31,7 @@ from pynput.mouse import Controller
 from time import sleep
 mouse = Controller()
 
-@as_pyjinn(JynntonFlags.JavaClass("net.minecraft.gizmos.Gizmos"), JynntonFlags.JavaClass("net.minecraft.util.ARGB"), JynntonFlags.JavaClass("net.minecraft.core.BlockPos"), JynntonFlags.JavaClass("net.minecraft.gizmos.GizmoStyle") )
+@as_pyjinn(JynntonFlags.JavaClass("net.minecraft.gizmos.Gizmos"), JynntonFlags.JavaClass("net.minecraft.util.ARGB"), JynntonFlags.JavaClass("net.minecraft.core.BlockPos"), JynntonFlags.JavaClass("net.minecraft.gizmos.GizmoStyle"))
 def render(event):
     Gizmos.cuboid(BlockPos(0,0,0),GizmoStyle.stroke(ARGB.color(255,200,100,200)))
 
