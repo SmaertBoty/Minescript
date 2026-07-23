@@ -37,7 +37,7 @@ def render(event):
 
 @as_pyjinn()
 async def tick(event):
-    x,y = await get_mouse_position()
+    x,y = await get_mouse_position() # when calling out to python functions, always use 'await', otherwise it will silently fail
     print(f"X: {x}, Y: {y}")
 
 @register_python_function
