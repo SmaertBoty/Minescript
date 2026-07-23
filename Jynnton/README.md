@@ -4,12 +4,13 @@ Jynnton (`ˈdʒɪn.θən`, aka Jinn-ton) is a library made for Minescript, that 
 Requirements:
 - Minescript 5.0+
 - Mappings (`\install_mappings`) for versions below 26.x
-- `pyjinn_json`: https://github.com/SmaertBoty/Minescript/blob/main/pyjinn/pyjinn_json.py
+- `pyjinn_json`: https://github.com/SmartBoty/Minescript/blob/main/pyjinn/pyjinn_json.py
 - Only tested on version 1.21.11, but may work on other versions aswell
 - Python 3.12 +
 
 What this library allows you to do:
 - Execute Pyjinn code, straight from Python
+- Easy calback between Python and Pyjinn
 - Run functions on Pyjinn events
 - And ofc, access java internals in just miliseconds
 
@@ -23,42 +24,28 @@ def foo(): pass
 ```
 Upon calling `foo()`, the function will now be called in Pyjinn
 
-## Decorator flags
-The decorator also allows you to attach special metadata to the function
-### Include flags
-These specify what java classes your function requires:
-#### Common:
-- These are builtin, commonly used classes / modifiers. Inlude them using `"common@modifier"`
-- Possible classes:
-  - `mc` -> `net.minecraft.client.Minecraft.getInstance()`
-  - `mappings` -> `net.minescript.common.Minescript.mappingsLoader.get()`
-  - `Gizmos` -> `net.minecraft.gizmos.Gizmos`
-  - `GizmoStyle` -> `net.minecraft.gizmos.GizmoStyle`
-  - `ARGB` -> `net.minecraft.util.ARGB`
-  - `BlockPos` -> `net.minecraft.core.BlockPos`
-  - `globals` -> This one gives you access to use the `globals` variable: `globals[key]`
-  - `invoke` -> This one allows you to invoke other pyjinn functions, from this pyjinn function: `invoke("function_name",*args)`. Returning not supported for those functions for now
-#### Class:
-- These are your extra classes that your function needs. Include them with `class@class.full.path`
-#### Special:
-- These are special lines of code, that get executed upon creating the function. Include them with `special@code_snippet`
-### Event flag
-- Specify an event that will call the function. Use it with `event="event_name"`
-- Possible events are all builtin Pyjinn events
-### Return flag
-- Specify wheter this function returns a piece of data. Use it with `type="returning" / "noreturn"`
-- Possible flags:
-  - `noreturn` (default)
-  - `returning`
-
-Example usage of decorator flags:
-- A function that uses common flags, and the render event to render a cube at 0,0,0
+Example usage:
 ```py
-from Jynnton import as_pyjinn
+from Jynnton import as_pyjinn, register_python_function, add_event_listener, JynntonFlags
+from pynput.mouse import Controller
+from time import sleep
+mouse = Controller()
 
-@as_pyjinn(include=["common@Gizmos","common@ARGB","common@BlockPos","common@GizmoStyle"],event="render")
-def test(_):
+@as_pyjinn(JynntonFlags.JavaClass("net.minecraft.gizmos.Gizmos"), JynntonFlags.JavaClass("net.minecraft.util.ARGB"), JynntonFlags.JavaClass("net.minecraft.core.BlockPos"), JynntonFlags.JavaClass("net.minecraft.gizmos.GizmoStyle") )
+def render(event):
     Gizmos.cuboid(BlockPos(0,0,0),GizmoStyle.stroke(ARGB.color(255,200,100,200)))
 
-while True: pass # Keep the script alive
+@as_pyjinn()
+async def tick(event):
+    x,y = await get_mouse_position()
+    print(f"X: {x}, Y: {y}")
+
+@register_python_function
+def get_mouse_position():
+    return mouse.position
+
+add_event_listener("render",render)
+add_event_listener("tick",tick)
+
+while True: sleep(1) # Keep the script alive
 ```
