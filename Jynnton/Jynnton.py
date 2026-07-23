@@ -1,61 +1,84 @@
 import inspect
-import json
-import socket
-from system.lib.java import eval_pyjinn_script as eps, JavaObject, JavaClassType
-from uuid import uuid4
-from concurrent.futures import Future
-from threading import Thread
+import ast
 from functools import wraps
+import json
+from uuid import uuid4
+from threading import get_ident, Thread
+import socket
+from system.lib.java import eval_pyjinn_script as eps
+from concurrent.futures import Future
 import sys
+import os
+from time import sleep
 
 concurrent = {}
-callables = {}
+registered_python_functions = {}
 
-def as_pyjinn(include=[], event=None, type="noreturn"):
-    def decorator(func):
-        if not hasattr(func, "Jynnton_id"): func.Jynnton_id = str(uuid4())
-        if not hasattr(func, "Jynnton_init"): func.Jynnton_init = True
+class JynntonFlags:
+    mc:str="common@mc"
+    @staticmethod
+    def JavaClass(_class): return f"class@{_class}"
+
+def add_event_listener(event,func):
+    payload = json.dumps({"type":4,"event":event,"name":func.__name__,"async":func.is_async}, separators=(",", ":"))
+    writer.write(payload + "\n")
+    writer.flush()
+
+def register_python_function(func):
+    returns = any(has_return(child) for child in ast.iter_child_nodes(ast.parse(inspect.getsource(func).split("\n",1)[-1]).body[0]))
+    registered_python_functions[func.__name__] = func
+    payload = json.dumps({"type":2, "funcs":[func.__name__], "returns":returns}, separators=(",", ":"))
+    writer.write(payload + "\n")
+    writer.flush()
+    return func
+
+def _register_pyjinn_function(name,src,is_async,include):
+    payload = json.dumps({"type":0,"name":name,"code":src,"async":is_async,"include":include}, separators=(",", ":"))
+    writer.write(payload+"\n")
+    writer.flush()
+
+def call_function(name,is_async,returns,args,kwargs):
+    if returns: ufcid = f"{get_ident()}@{uuid4()}"
+    else: ufcid = -1
+    payload = json.dumps({"type":1,"name":name,"async":is_async,"returns":returns,"ufcid":ufcid,"args":args,"kwargs":kwargs}, separators=(",", ":"))
+    writer.write(payload+"\n")
+    writer.flush()
+    if returns:
+        future = Future()
+        concurrent[ufcid] = future
+        payload = future.result()
+        concurrent.pop(ufcid)
+        if payload["fail"]: raise Exception(payload["result"])
+        else: return payload["result"]
+
+def has_return(node):
+    if isinstance(node, ast.Return): return True
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)) and node: return False
+
+def as_pyjinn(*include:list[JynntonFlags]):
+    if len(include) > 1:
+        if isinstance(include[0], list): include = include[0]
+    def decorate(func):
+        code = inspect.getsource(func)
+        code = code.split("\n",1)[-1]
+        code_body = ast.parse(code).body
+        for node in code_body:
+            if isinstance(node, (ast.AsyncFunctionDef)):
+                is_async = True
+                name = node.name
+            elif isinstance(node, (ast.FunctionDef)):
+                is_async = False
+                name = node.name
+        func.Jynnton_ID = str(uuid4())
+        func.returns = any(has_return(child) for child in ast.iter_child_nodes(code_body[0]))
+        func.name = name
+        func.is_async = is_async
+        _register_pyjinn_function(name,code,is_async,include)
         @wraps(func)
-        def wrapper(*args, **kwargs):
-            if func.Jynnton_init:
-                kwargs["init"] = True
-                func.Jynnton_init = False
-            elif "init" not in kwargs: kwargs["init"] = False
-            ufcid = str(uuid4())
-            code = inspect.getsource(func).split("\n")[1:]
-            j = 0
-            if code[0].startswith(" "):
-                for i in code[0]:
-                    if i != " ": break
-                    j += 1
-                code = [line[j:] for line in code]
-            out = []
-            preserve_payload = False
-            argmetas = []
-            argdata = []
-            i = 0
-            for arg in args:
-                if isinstance(arg, JavaObject):
-                    if isinstance(arg, JavaClassType): out.append(fr"\%ARGCLASS;{arg.class_name}")
-                    else: preserve_payload = True ; out.append(fr"\%PRESERVED;{i}") ; argmetas.append(str(i)) ; argdata.append(arg)
-                else: out.append(arg)
-                i += 1
-            if preserve_payload: insert_type_preserving_data([ufcid,";".join(argmetas),*argdata])
-            args = out
-            data = json.dumps({"code": "\n".join(code)[:-1], "includes": include, "event": event, "name": func.__name__, "id": func.Jynnton_id, "type": type, "ufcid": ufcid, "args": args, "init": kwargs["init"]})
-            writer.write(data + "\n")
-            writer.flush()
-            if type == "returning" and not kwargs["init"]:
-                response = Future()
-                concurrent[ufcid] = response
-                resp = response.result()
-                concurrent.pop(ufcid)
-                if resp["fail"]: raise RuntimeError(resp["result"])
-                return resp["result"]
-            else: return ufcid
-        wrapper()
+        def wrapper(*args,**kwargs):
+            return call_function(func.name,func.is_async,func.returns,args,kwargs)
         return wrapper
-    return decorator
+    return decorate
 
 bridge = socket.socket()
 bridge.bind(("127.0.0.1", 0))
@@ -64,123 +87,110 @@ port = bridge.getsockname()[1]
 
 script = eps(
 r"""
-debug_log = False
-
 import pyjinn_json as json
-Minescript = JavaClass("net.minescript.common.Minescript")
-Script = JavaClass("org.pyjinn.interpreter.Script")
-ClassMethodName = JavaClass("org.pyjinn.interpreter.Script$ClassMethodName")
-Array = JavaClass("java.lang.reflect.Array")
-Object = JavaClass("java.lang.Object")
+Socket = JavaClass("java.net.Socket")
 BufferedWriter = JavaClass("java.io.BufferedWriter")
 OutputStreamWriter = JavaClass("java.io.OutputStreamWriter")
-Socket = JavaClass("java.net.Socket")
 StandardCharsets = JavaClass("java.nio.charset.StandardCharsets")
 BufferedReader = JavaClass("java.io.BufferedReader")
 InputStreamReader = JavaClass("java.io.InputStreamReader")
+mappings = JavaClass("net.minescript.common.Minescript").mappingsLoader.get()
+Minescript = JavaClass("net.minescript.common.Minescript")
+BoundFunction = JavaClass("org.pyjinn.interpreter.Script$BoundFunction")
+PyjClass = JavaClass("org.pyjinn.interpreter.Script$PyjClass")
+Array = JavaClass("java.lang.reflect.Array")
+Object = JavaClass("java.lang.Object")
+HashMap = JavaClass("java.util.HashMap")
+ClassLevelMethod = JavaClass("org.pyjinn.interpreter.Script$ClassLevelMethod")
+CtorFunction = JavaClass("org.pyjinn.interpreter.Script$CtorFunction")
+PyjClassContainer = JavaClass("org.pyjinn.interpreter.Script$PyjClassContainer")
+Class = JavaClass("java.lang.Class")
 Random = JavaClass("java.util.Random")()
-ScriptBoundFunction = JavaClass("org.pyjinn.interpreter.Script$BoundFunction")
+
+def reflect_field(_class, field_name, raw=False):
+    clss = _class.getClass()
+    f = mappings.getRuntimeFieldName(clss, field_name)
+    field = clss.getDeclaredField(f)
+    field.setAccessible(True)
+    if not raw: return field.get(_class)
+    else: return field
+
+def as_array(items,specific_type=Object):
+    array = Array.newInstance(type(specific_type),len(items))
+    for i,arg in enumerate(items):
+        Array.set(array, i, arg)
+    return array
+
+def __init__(self): return self
 
 log("[Jynnton] Waking up ...")
 bridge = Socket("127.0.0.1", """ + str(port) + r""")
 bridge.setSoTimeout(1)
 writer = BufferedWriter(OutputStreamWriter(bridge.getOutputStream(), StandardCharsets.UTF_8))
 reader = BufferedReader(InputStreamReader(bridge.getInputStream(), StandardCharsets.UTF_8))
-builtin_funcs = ["set_chat_input","player_hand_items","get_block","echo","player_press_drop","player_press_forward","player_press_sneak","getblock","_SleepRequest","__script__","ManagedCallback","player_inventory_select_slot","getblocklist","screen_name","player_name","player_orientation","get_entities","_System","Script","add_event_listener","BlockPacker","player_get_targeted_entity","players","player_press_left","get_player","execute","get_block_region","echo_json","player_press_attack","__name__","set_interval","append_chat_history","player_get_targeted_block","container_get_items","log","job_info","_EventRequest","show_chat_screen","screenshot","sys","player_press_jump","player_press_backward","player_set_orientation","chat_input","player_position","BlockPack","player_press_pick_item","_Coroutine","Minescript","BlockRegion","player","player_press_sprint","player_press_right","remove_event_listener","player_inventory","player_look_at","player_press_swap_hands","version_info","get_players","Rotation","Rotations","get_block_list","combine_rotations","set_timeout","EventLoop","press_key_bind","entities","chat","player_health","_RuntimeException","world_info","player_press_use"]
 portid = "Jynnton_globals:" + str(""" + str(port) + r""")
-__script__.vars["game"][portid] = {}
-__script__.vars["game"][portid]["globals"] = {}
-__script__.vars["game"][portid]["funcs"] = []
-__script__.vars["game"][portid]["returns"] = {}
-if "hotloaded_javaclasses" not in __script__.vars["game"]: __script__.vars["game"]["hotloaded_javaclasses"] = {}
+builtins = [reflect_field(builtin,"name") for builtin in reflect_field(__script__.mainModule().globals(),"BUILTINS")] + ["__has_explicit_Minescript_import__","set_chat_input","player_hand_items","get_block","echo","player_press_drop","player_press_forward","player_press_sneak","getblock","_SleepRequest","__script__","ManagedCallback","player_inventory_select_slot","getblocklist","screen_name","player_name","player_orientation","get_entities","_System","Script","add_event_listener","BlockPacker","player_get_targeted_entity","players","player_press_left","get_player","execute","get_block_region","echo_json","player_press_attack","__name__","set_interval","append_chat_history","player_get_targeted_block","container_get_items","log","job_info","_EventRequest","show_chat_screen","screenshot","sys","player_press_jump","player_press_backward","player_set_orientation","chat_input","player_position","BlockPack","player_press_pick_item","_Coroutine","Minescript","BlockRegion","player","player_press_sprint","player_press_right","remove_event_listener","player_inventory","player_look_at","player_press_swap_hands","version_info","get_players","Rotation","Rotations","get_block_list","combine_rotations","set_timeout","EventLoop","press_key_bind","entities","chat","player_health","_RuntimeException","world_info","player_press_use"]
+pcc = type(PyjClassContainer).getDeclaredConstructor(as_array(["".getClass()],Class))
+pcc.setAccessible(True)
+if "Jynnton" not in __script__.vars["game"]: __script__.vars["game"]["Jynnton"] = {}
+__script__.vars["game"]["Jynnton"][portid] = {}
+__script__.vars["game"]["Jynnton"][portid]["returns"] = {}
 
-common = {
-    "mc":'mc = JavaClass("net.minecraft.client.Minecraft").getInstance()',
-    "mappings": 'mappings = JavaClass("net.minescript.common.Minescript").mappingsLoader.get()',
-    "Gizmos": 'Gizmos = JavaClass("net.minecraft.gizmos.Gizmos")',
-    "ARGB": 'ARGB = JavaClass("net.minecraft.util.ARGB")',
-    "BlockPos": 'BlockPos = JavaClass("net.minecraft.core.BlockPos")',
-    "GizmoStyle": 'GizmoStyle = JavaClass("net.minecraft.gizmos.GizmoStyle")',
-    "globals": f'globals = __script__.vars["game"]["{portid}"]["globals"]',
-    "invoke": f'def invoke(name,*args): __script__.vars["game"]["{portid}"]["funcs"].append([uid,name,args])'
+cached_java_objects = []
+common_includables = {
+    "mc":'mc = JavaClass("net.minecraft.client.Minecraft").getInstance()'
 }
 
-cached_scripts = {}
-active_scripts = []
-reserved_payloads = {}
-python_callables = []
+def rebind_method(method,context=__script__.mainModule().globals()):
+    return BoundFunction(method.functionDef(), context, method.defaults(), method.keywordDefaults(), method.code(), method.isCtor(), method.zombieCounter())
 
-class RuntimeScript:
-    def __init__(self,this,namespace,name):
-        self.script = this
-        self.namespace = namespace
-        self.name = name
-        active_scripts.append(self)
-    
-    def invoke(self,func,*args):
-        array_args = Array.newInstance(type(Object),len(args))
-        for i,arg in enumerate(args):
-            Array.set(array_args, i, arg)
-        if "." in func:
-            clss,method = func.split(".")
-            print(f"Calling {clss} - {func} {args}")
-            print(self.namespace[clss].callMethod(self.script.mainModule().globals().env(),func,array_args))
-        else: return self.namespace[func].call(self.script.mainModule().globals().env(),array_args)
-
-def map(callable,iterable):
-    return [callable(i) for i in iterable]
-
-def reverse(lst):
-    out = [None for _ in range(len(lst))]
-    i = len(lst)-1
-    if i > 0:
-        for item in lst:
-            out[i] = item
-            i -= 1
-    else: return lst
-    return out
-
-def hotload_JavaClass(clss):
-    if clss in __script__.vars["game"]["hotloaded_javaclasses"]: return __script__.vars["game"]["hotloaded_javaclasses"][clss]
+def rebind_class(_class,context=__script__.mainModule().globals()):
+    name = reflect_field(_class,"name")
+    ctor = reflect_field(_class,"ctor")
+    isFrozen = reflect_field(_class,"isFrozen")
+    instanceMethods = reflect_field(_class,"instanceMethods")
+    classLevelMethods = reflect_field(_class,"classLevelMethods")
+    hashMethod = reflect_field(_class,"hashMethod")
+    strMethod = reflect_field(_class,"strMethod")
+    new_instanceMethods = HashMap()
+    newClassLevelMethods = HashMap()
+    has_init = False
+    for key in instanceMethods.keySet():
+        if isinstance(instanceMethods.get(key), CtorFunction): has_init = instanceMethods.get(key) ; continue
+        new_instanceMethods.put(key,rebind_method(instanceMethods.get(key),context))
+    for key in classLevelMethods.keySet():
+        newClassLevelMethods.put(key,ClassLevelMethod(classLevelMethods.get(key).isClassmethod(),rebind_method(classLevelMethods.get(key).function(),context)))
+    if has_init:
+        ctor = CtorFunction(has_init.type(), rebind_method(has_init.function()))
+        return PyjClass(name, ctor, isFrozen, new_instanceMethods, newClassLevelMethods, hashMethod, strMethod)
     else:
-        q = "'"
-        execute(f'''\eval  {q}0{q} {q}__script__.vars["game"]["hotloaded_javaclasses"]["{clss}"] = JavaClass("{clss}"){q} ''')
-        return __script__.vars["game"]["hotloaded_javaclasses"][clss]
+        ctor = CtorFunction(pcc.newInstance(as_array([name])), __init__)
+        return PyjClass(name, ctor, isFrozen, new_instanceMethods, newClassLevelMethods, hashMethod, strMethod)
 
-def exec(source, name, expected_names:list=[], tied_event:str=None):
-    log("[Jynnton] Creating new script instance")
-    source += f'\nuid = "{name}"'
-    classes = []
-    for item in expected_names:
-        parts = item.split("@")
-        key = parts[0]
-        value = map(str,parts[1:])
-        value = "@".join(value)
-        if key == "common": classes.append(common[value]) ; log(f"[Jynnton] Adding common includable: {value}")
-        elif key == "special": classes.append(value) ; log(f"[Jynnton] Adding special includable: {value}")
-        else: classes.append(f'{value.split(".")[-1]} = JavaClass("{value}")') ; log(f"[Jynnton] Adding class includable: {value}")
-    source += "\n" + "\n".join(classes)
-    if tied_event: source += f'\nadd_event_listener("{tied_event}",{name})'
-    log("[Jynnton] Source code injection complete")
-    script = Minescript.loadPyjinnScript(JavaList(["__eval__.pyj"]), source)
+def exec(code):
+    script = Minescript.loadPyjinnScript(JavaList(["__exec__"]), code)
     script.redirectStdout(__script__.stdout)
     script.redirectStderr(__script__.stderr)
     for name in __script__.vars.keys():
         script.vars[name] = __script__.vars[name]
-    script.atExit(lambda status: __script__.exit(status))
     script.exec()
-    log("[Jynnton] Script created from source code")
-    out = {}
-    for key in script.mainModule().globals().vars():
-        if key not in builtin_funcs: out[key] = script.get(key)
-    log(f"[Jynnton] Finished script, src: \n{source}")
-    return RuntimeScript(script,out,"TEST")
+    for key, value in script.mainModule().globals().vars().items():
+        if key not in builtins:
+            if isinstance(value,BoundFunction): __script__.mainModule().globals().setBoundFunction(rebind_method(script.mainModule().globals().get(key)))
+            elif isinstance(value,PyjClass): __script__.mainModule().globals().set(key, rebind_class(script.mainModule().globals().get(key)))
+            else: __script__.mainModule().globals().set(key,value)
+    script.exit(0)
 
 def return_call(data):
-    writer.write(json.dumps(data) + "\n")
+    writer.write(json.dumps(data)+"\n")
     writer.flush()
 
-def main(_):
+async def run_async_function(name,ufcid,returns,args,kwargs):
+    try: result = await __script__.mainModule().globals().get(name)(*args,**kwargs) ; fail = False
+    except Exception as e: result = e.getMessage() ; fail = True
+    if returns: return_call({"ufcid":ufcid,"result":result,"fail":fail})
+
+def _main(_):
     lines = []
     iters = 0
     while True:
@@ -195,59 +205,49 @@ def main(_):
             break
     for line in lines:
         payload = json.loads(line)
-        if payload["ufcid"] == -1.0:
-            if payload["funcid"] not in python_callables: python_callables.append(payload["funcid"])
-        else:
-            if payload["id"] not in cached_scripts:
-                cached_scripts[payload["id"]] = exec(payload["code"],payload["name"],payload["includes"],payload["event"])
-                log("[Jynnton] Caching uncached script")
-            if not payload["init"]:
-                try:
-                    if debug_log: log(f"[Jynnton-Debug] Resolving external invocation: {payload["name"]}{payload["args"]}")
-                    args = []
-                    for arg in payload["args"]:
-                        if isinstance(arg,str):
-                            if arg.startswith(r"\%PRESERVED;"):
-                                args.append(reserved_payloads[payload["ufcid"]][arg.split(";")[-1]])
-                                if debug_log: log(f"[Jynnton-Debug] Adding reserved data: {arg.split(";")[-1]}")
-                            elif arg.startswith(r"\%ARGCLASS;"):
-                                args.append(hotload_JavaClass(arg.split(";")[-1]))
-                                if debug_log: log(f"[Jynnton-Debug] Adding reserved class: {arg.split(";")[-1]}")
-                            else: args.append(arg)
-                        else: args.append(arg)
-                    del reserved_payloads[payload["ufcid"]]
-                    if debug_log: log(f"[Jynnton-Debug] Executing external invocation")
-                    result = cached_scripts[payload["id"]].invoke(payload["name"],*args)
-                    fail = False
-                except Exception as e: result = str(e) ; fail = True
-                if payload["type"] == "returning" or fail:
-                    return_call({"fail":fail,"result":result,"ufcid":payload["ufcid"]})
-                    if debug_log: log(f"[Jynnton-Debug] Returning from invocation. Failed: {fail}")
-    for uid, name, args in __script__.vars["game"][portid]["funcs"]:
-        if debug_log: log(f"[Jynnton-Debug] Resolving internal invocation: {name}{args}")
-        for script in active_scripts:
-            if debug_log: log(f"[Jynnton-Debug] Searching for function in {script.namespace}")
-            if name in script.namespace:
-                __script__.vars["game"][portid]["returns"][uid] = script.invoke(name, *args)
-                if debug_log: log(f"[Jynnton-Debug] Found name {name}. Executing internal invocation")
-        if debug_log: log(f"[Jynnton-Debug] Searching for function in {python_callables}")
-        for funcid in python_callables:
-            if name == funcid:
-                if debug_log: log(f"[Jynnton-Debug] Found name {name}. Executing external invocation")
-                return_call({"fail":False,"ufcid":-1.0,"funcid":name,"args":list(args) if args else []})
-    __script__.vars["game"][portid]["funcs"] = []
+        if payload["type"] == 0: # Function init -> {"type":0,"name":name,"code":src,"async":is_async,"include":include}
+            code = payload["code"]
+            for includable in payload["include"]:
+                typ,val = includable.split("@")
+                if val not in cached_java_objects:
+                    cached_java_objects.append(val)
+                    if typ == "common": code += f"\n{common_includables[val]}"
+                    elif typ == "class": code += f'\n{val.split(".")[-1]} = JavaClass("{val}")'
+            log(f"[Jynnton] Adding code to glopal space:\n{code}")
+            exec(code)
+        elif payload["type"] == 1: # Function call -> {"type":1,"name":name,"async":is_async,"returns":returns,"ufcid":ufcid,"args":args,"kwargs":kwargs}
+            name = payload["name"]
+            if payload["async"]: run = lambda: EventLoop().run(lambda this: run_async_function(name,payload["ufcid"],payload["returns"],payload["args"],payload["kwargs"]))
+            else: run = lambda: __script__.mainModule().globals().get(name)(*payload["args"],**payload["kwargs"])
+            try: result = run() ; fail = False
+            except Exception as e: result = e.getMessage() ; fail = True
+            if not payload["async"]: return_call({"ufcid":payload["ufcid"],"result":result,"fail":fail})
+        elif payload["type"] == 2: # Python function register -> {"type":2,"funcs":out}
+            for func in payload["funcs"]:
+                code = (
+'''
+async def ''' + func + '''(*args,**kwargs):
+    ufcid = str(Random.nextInt())
+    return_call({"ufcid":ufcid,"func":"''' + func + '''","args":args,"kwargs":kwargs,"returns": ''' + str(payload["returns"]) + '''})
+    while ''' + str(payload["returns"]) + ''':
+        el = EventLoop()
+        await el.sleep(0)
+        if ufcid in [key for key in __script__.vars["game"]["Jynnton"][portid]["returns"]]:
+            dat = __script__.vars["game"]["Jynnton"][portid]["returns"][ufcid]
+            del __script__.vars["game"]["Jynnton"][portid]["returns"][ufcid]
+            return dat
+''')
+                log(f"[Jynnton] Adding Python function to global space: \n{code}")
+                exec(code)
+        elif payload["type"] == 3: # Python func return -> {"type":3,"result":globals().get(data["func"])(),"ufcid":data["ufcid"]}
+            __script__.vars["game"]["Jynnton"][portid]["returns"][payload["ufcid"]] = payload["result"]
+        elif payload["type"] == 4: # add_event_listener {"type":4,"event":event,"name":func.__name__,"async":is_async}
+            if payload["async"]: add_event_listener(payload["event"],lambda event: EventLoop().run(lambda this: run_async_function(payload["name"],-1,False,[event],{}))) # name,ufcid,returns,args,kwargs
+            else: add_event_listener(payload["event"],__script__.mainModule().globals().get(payload["name"]))
 
 log("[Jynnton] Starting main loop")
-add_event_listener("render",main)
-
-def insert_type_preserving_data(payload):
-    argmetas = payload[1].split(";")
-    out = {}
-    for i in range(len(argmetas)):
-        out[argmetas[i]] = payload[i+2]
-    reserved_payloads[payload[0]] = out
+add_event_listener("render",_main)
 """)
-insert_type_preserving_data = script.get("insert_type_preserving_data")
 
 conn, _ = bridge.accept()
 reader = conn.makefile("r", encoding="utf-8")
@@ -256,21 +256,19 @@ writer = conn.makefile("w", encoding="utf-8")
 def __reader__():
     while True:
         line = reader.readline()
-        data = json.loads(line[:-1])
-        if data["ufcid"] in concurrent: concurrent[data["ufcid"]].set_result(data)
-        elif data["ufcid"] == 0: sys.stderr.write(f"Developer exception (How have you managed to do this?):\n{data["result"]}")
-        elif data["fail"]: sys.stderr.write((f"The following could not be raised on the main thread:\n{data["result"]}\n \nNOTICE:\n The above error is the result of a non returning function call from Jynnton. For debugging purposes, enable 'returning' on any possible functions: '@as_pyjinn(type=\"returning\")'",)[0])
-        elif data["ufcid"] == -1: callables[data["funcid"]](*data["args"])
+        data = json.loads(line)
+        if data["ufcid"] in concurrent: concurrent.pop(data["ufcid"]).set_result(data)
+        elif data["ufcid"] == 0:
+            sys.stderr.write(f"Developer exception (How have you managed to do this?):\n{data["result"]}")
+            os._exit(-1)
+        elif data["ufcid"] == -1:
+            if data["fail"]:
+                sys.stderr.write((f"The following could not be raised on the main thread:\n{data["result"]}\n \nNOTICE:\n The above error is the result of a non returning function call from Jynnton. For debugging purposes, add a 'return' to it",)[0])
+                os._exit(-1)
+        elif data["ufcid"]:
+            res = registered_python_functions[data["func"]](*data["args"],**data["kwargs"])
+            if data["returns"]:
+                writer.write(json.dumps({"type":3,"result":res,"ufcid":data["ufcid"]},separators=(",", ":"))+"\n")
+                writer.flush()
 
 Thread(target=__reader__,daemon=True).start()
-
-@as_pyjinn(type="returning",include=["common@globals"])
-def snapshot_pyjinn_globals():
-    return globals
-
-def sync_python_function(callable):
-    callables[callable.__name__] = callable
-    writer.write(json.dumps({"ufcid":-1,"funcid":callable.__name__})+"\n")
-    writer.flush()
-
-__all__ = ["as_pyjinn","snapshot_pyjinn_globals","sync_python_function"]
